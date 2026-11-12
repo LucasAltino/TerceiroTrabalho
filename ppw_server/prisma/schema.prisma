@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Prioridade {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum Status {
+  ABERTO
+  CONCLUIDO
+}
+
+model Ticket {
+  id          String    @id
+  title       String
+  description String
+  justify     String?
+  prioridade    Prioridade @default(BAIXA)
+  status      Status    @default(ABERTO)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime?  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@map("tickets")
+}
+
+enum ReturnType {
+  DEVOLUTION
+  EXCHANGE
+}
+
+enum ReturnStatus {
+  REQUESTED
+  POSTED
+  RECEIVED
+  INSPECTING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+model ReturnRequest {
+  id                   String       @id
+  orderId              String       @map("order_id")
+  customerId           String       @map("customer_id")
+  productId            String       @map("product_id")
+  type                 ReturnType
+  reason               String
+  description          String
+  status               ReturnStatus @default(REQUESTED)
+  trackingCode         String?      @map("tracking_code")
+  inspectionResult     String?      @map("inspection_result")
+  rejectionReason      String?      @map("rejection_reason")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@map("return_requests")
+}
