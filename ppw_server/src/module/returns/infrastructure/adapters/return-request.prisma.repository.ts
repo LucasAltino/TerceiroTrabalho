@@ -157,6 +157,9 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
         });
         if (result.count !== 1) throw new Error('Pending refund was not found for the approved return');
       }
+      if (data.status.getValue() === ReturnStatusValue.CANCELLED) {
+        await this.cancelReturn(transaction, data.id, data.orderId, previousStatus, data.type);
+      }
 
       const updated = await transaction.returnRequest.findUnique({ where: { id: data.id } });
       if (!updated) throw new Error('Return request disappeared after a successful update');
@@ -291,6 +294,51 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
         throw new VersionConflictError('Reverse code has already been used');
       }
       throw new PayloadValidationError('Reverse code has expired or is invalid');
+    }
+  }
+
+  private async cancelReturn(
+    transaction: Prisma.TransactionClient,
+    returnRequestId: string,
+    orderId: string,
+    previousStatus: ReturnStatusValue,
+    returnType: string,
+  ): Promise<void> {
+    const now = new Date();
+    await transaction.reverseCode.updateMany({
+      where: { returnRequestId, expiresAt: { gt: now } },
+      data: { expiresAt: now },
+    });
+
+    if (previousStatus !== ReturnStatusValue.APPROVED || returnType === 'EXCHANGE') return;
+
+    const refund = await transaction.refund.findUnique({ where: { returnRequestId } });
+    if (!refund || refund.status !== RefundStatus.PENDING) {
+      throw new VersionConflictError('Only a pending refund can be reversed by cancellation');
+    }
+
+    const reversed = await transaction.refund.updateMany({
+      where: { returnRequestId, status: RefundStatus.PENDING },
+      data: { status: RefundStatus.REVERSED },
+    });
+    if (reversed.count !== 1) {
+      throw new VersionConflictError('Refund was changed by another operation');
+    }
+
+    if (decimalToCents(refund.value) === 0n) return;
+    const order = await transaction.order.findUnique({
+      where: { id: orderId },
+      select: { amountRefunded: true },
+    });
+    if (!order || decimalToCents(order.amountRefunded) < decimalToCents(refund.value)) {
+      throw new Error('Order refund balance is inconsistent');
+    }
+    const released = await transaction.order.updateMany({
+      where: { id: orderId, amountRefunded: order.amountRefunded },
+      data: { amountRefunded: { decrement: refund.value } },
+    });
+    if (released.count !== 1) {
+      throw new VersionConflictError('Order refund balance was changed by another operation');
     }
   }
 }

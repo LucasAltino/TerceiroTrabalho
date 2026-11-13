@@ -2,7 +2,12 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { ReturnRequestEntity } from '../../domain/entity/return-request.entity';
 import { VersionConflictError } from '../../domain/errors';
-import { ApproveRule, CompleteRule, PostRule } from '../../domain/transition/return-transition-rules';
+import {
+  ApproveRule,
+  CancelRule,
+  CompleteRule,
+  PostRule,
+} from '../../domain/transition/return-transition-rules';
 import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import { ReturnRequestPrismaRepository } from './return-request.prisma.repository';
 import { ProportionalRefundCalculator } from '../../domain/refund/proportional-refund-calculator';
@@ -19,6 +24,7 @@ type MockTransaction = {
   };
   refund: {
     create: jest.Mock;
+    findUnique: jest.Mock;
     updateMany: jest.Mock;
   };
   reverseCode: {
@@ -81,7 +87,7 @@ describe('ReturnRequestPrismaRepository.updateWithVersion', () => {
         findUnique: jest.fn(),
       },
       order: { findUnique: jest.fn(), updateMany: jest.fn() },
-      refund: { create: jest.fn(), updateMany: jest.fn() },
+      refund: { create: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
       reverseCode: { findUnique: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
       returnStatusHistory: { create: jest.fn() },
     };
@@ -116,7 +122,7 @@ describe('ReturnRequestPrismaRepository.updateWithVersion', () => {
         findUnique: jest.fn(),
       },
       order: { findUnique: jest.fn(), updateMany: jest.fn() },
-      refund: { create: jest.fn(), updateMany: jest.fn() },
+      refund: { create: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
       reverseCode: { findUnique: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
       returnStatusHistory: {
         create: jest.fn().mockRejectedValue(new Error('audit unavailable')),
@@ -177,6 +183,7 @@ describe('ReturnRequestPrismaRepository.updateWithVersion', () => {
       },
       refund: {
         create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       reverseCode: { findUnique: jest.fn(), updateMany: jest.fn(), create: jest.fn() },
@@ -248,7 +255,7 @@ describe('ReturnRequestPrismaRepository.updateWithVersion', () => {
     const transaction: MockTransaction = {
       returnRequest: { updateMany: jest.fn(), findUnique: jest.fn() },
       order: { findUnique: jest.fn(), updateMany: jest.fn() },
-      refund: { create: jest.fn(), updateMany: jest.fn() },
+      refund: { create: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
       reverseCode: { findUnique: jest.fn().mockResolvedValue(code), updateMany: jest.fn(), create: jest.fn() },
       returnStatusHistory: { create: jest.fn() },
     };
@@ -269,5 +276,57 @@ describe('ReturnRequestPrismaRepository.updateWithVersion', () => {
       ),
     ).rejects.toBeInstanceOf(errorType);
     expect(transaction.returnRequest.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('cancels an approved return, invalidates the code, and reverses its pending refund atomically', async () => {
+    const transaction: MockTransaction = {
+      returnRequest: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'rr-1', status: ReturnStatusValue.CANCELLED }),
+      },
+      order: {
+        findUnique: jest.fn().mockResolvedValue({ amountRefunded: new Prisma.Decimal('25.00') }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      refund: {
+        create: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({
+          value: new Prisma.Decimal('25.00'),
+          status: 'PENDING',
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      reverseCode: { findUnique: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }), create: jest.fn() },
+      returnStatusHistory: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      $transaction: jest.fn((work: (tx: MockTransaction) => Promise<unknown>) => work(transaction)),
+    } as unknown as PrismaService;
+    const repository = new ReturnRequestPrismaRepository(prisma, new ProportionalRefundCalculator());
+    const cancelled = createEntity().transition(CancelRule, { justification: 'Customer changed their mind' });
+
+    await repository.updateWithVersion(
+      cancelled,
+      5,
+      [ReturnStatusValue.APPROVED],
+      ReturnStatusValue.APPROVED,
+      'customer-1',
+      'Customer changed their mind',
+    );
+
+    expect(transaction.reverseCode.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ returnRequestId: 'rr-1' }),
+        data: expect.objectContaining({ expiresAt: expect.any(Date) }),
+      }),
+    );
+    expect(transaction.refund.updateMany).toHaveBeenCalledWith({
+      where: { returnRequestId: 'rr-1', status: 'PENDING' },
+      data: { status: 'REVERSED' },
+    });
+    expect(transaction.order.updateMany).toHaveBeenCalledWith({
+      where: { id: 'order-1', amountRefunded: new Prisma.Decimal('25.00') },
+      data: { amountRefunded: { decrement: new Prisma.Decimal('25.00') } },
+    });
   });
 });
