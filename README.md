@@ -99,6 +99,127 @@ erDiagram
     USERS ||--o{ RETURN_STATUS_HISTORY : authors
 ```
 
+Find files matching `**/*`
+
+Search for `\b(SOLID|Single Responsibility|Open.?Closed|Liskov|Interface Segregation|Depe...`
+
+Find files matching `ppw_server/src/**/*.ts`
+
+Search for `\b(interface|implements|abstract class|@Injectable|constructor\s*\()`
+
+Find files matching `ppw_server/src/**/*`
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\application\\service\\return-request.service.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\returns.module.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\domain\\refund\\refund-strategy.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\domain\\refund\\proportional-refund-calculator.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\domain\\transition\\transition-rule.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\tickets\\application\\service\\write\\create.ticket.service.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\tickets\\tickets.module.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\tickets\\domain\\ports\\ticket.read.repository.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\domain\\transition\\return-transition-rules.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\domain\\ports\\return-request.repository.ts"
+}
+
+Read , lines 1 to 60
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\returns\\infrastructure\\adapters\\return-request.prisma.repository.ts",
+  "view_range": [
+    1,
+    60
+  ]
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\tickets\\domain\\ports\\ticket.write.repository.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\tickets\\infrastructure\\adapters\\ticket.prisma.read.repository.ts"
+}
+
+Read 
+Completed with input: {
+  "path": "C:\\Users\\windows 11\\Desktop\\Trabalho\\TerceiroTrabalho\\ppw_server\\src\\module\\leads\\leads.module.ts"
+}
+
+Search for `export class ReturnRequestService|constructor\(@Inject|async criar|async tran...`
+
+Search for `export interface RefundStrategy|export class ProportionalRefundCalculator|exp...`
+
+Search for `RETURN_REQUEST_REPOSITORY|REFUND_STRATEGY|export class ReturnsModule`
+
+Search for `export interface ReturnRequestRepository|export class ReturnRequestPrismaRepo...`
+
+Search for `export interface Ticket(Read|Write)Repository|export class (CreateTicketServi...`
+
+Search for `export class LeadsService|export interface LeadRepository|export class LeadIn...`
+
+Search for `export interface ReturnRequestRepository|export class ReturnRequestPrismaRepo...`
+
+Search for `export interface ReturnRequestRepository|export class ReturnRequestPrismaRepo...`
+
+Search for `export interface TicketReadRepository|export interface TicketWriteRepository|...`
+
+Search for `export class ReturnRequestService|implements|constructor\(@Inject|async criar...`
+
+Search for `export class LeadsService|export interface LeadRepository|export class LeadIn...`
+
+O SOLID **não aparece como uma classe ou pasta chamada “SOLID”**; os princípios estão aplicados na organização do código, principalmente no backend `ppw_server`.
+
+- **S — Responsabilidade única (SRP):** há separação entre apresentação, aplicação, domínio e persistência. Por exemplo, o controller recebe requisições, o serviço coordena a operação e o repositório Prisma persiste os dados: `ReturnRequestService` e `ReturnRequestPrismaRepository`. **Observação:** esse serviço de devoluções reúne vários casos de uso (criar, buscar, listar, atualizar e transicionar), então o SRP é aplicado na separação das camadas, mas a classe ainda tem responsabilidades amplas.
+
+- **O — Aberto/fechado (OCP):** regras variáveis ficam separadas em abstrações. O cálculo de reembolso depende de `RefundStrategy` e há uma implementação concreta em `ProportionalRefundCalculator`. As transições também seguem a interface `TransitionRule`. Isso facilita acrescentar ou trocar regras; ainda assim, novas ações de transição também precisam ser registradas no mapa de regras.
+
+- **L — Substituição de Liskov (LSP):** os adapters implementam contratos que permitem trocar a implementação sem mudar o consumidor. Por exemplo, `ReturnRequestPrismaRepository` implementa `ReturnRequestRepository`. Aqui a evidência é a compatibilidade com as interfaces; não encontrei algo identificado explicitamente como “LSP”.
+
+- **I — Segregação de interfaces (ISP):** tickets separam operações de leitura e escrita em `TicketReadRepository` e `TicketWriteRepository`, evitando exigir que todo consumidor dependa de um contrato único com todas as operações.
+
+- **D — Inversão de dependência (DIP):** serviços dependem de interfaces injetadas, e não diretamente do Prisma. Um exemplo é `CreateTicketService`, que recebe `TICKET_WRITE_REPOSITORY`; o módulo conecta o token à implementação Prisma em `tickets.module.ts`. Em devoluções, a ligação do contrato ao adapter está em `returns.module.ts`.
+
+**Onde fica mais evidente:** nos módulos de **devoluções** e **tickets**, especialmente no uso de interfaces/ports e injeção de dependência.
+
+
 ## Máquina de estados
 
 ```mermaid
