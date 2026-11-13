@@ -7,6 +7,7 @@ export class CreateReturnRequestDto {
   reason!: string;
   description!: string;
   trackingCode?: string | null;
+  items!: { orderItemId: string; quantity: number }[];
 }
 
 export class UpdateReturnRequestDto {

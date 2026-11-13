@@ -1,9 +1,10 @@
 import { ReturnRequest } from '@prisma/client';
 import { ReturnRequestEntity } from '../entity/return-request.entity';
 import { ReturnStatusValue } from '../value-object/return-status.value.object';
+import { ReturnQuantity } from '../refund/refund-strategy';
 
 export interface ReturnRequestRepository {
-  create(request: ReturnRequestEntity): Promise<ReturnRequest>;
+  create(request: ReturnRequestEntity, items: ReturnQuantity[]): Promise<ReturnRequest>;
   findById(id: string): Promise<ReturnRequest | null>;
   findAll(customerId?: string): Promise<ReturnRequest[]>;
   update(request: ReturnRequestEntity): Promise<ReturnRequest>;

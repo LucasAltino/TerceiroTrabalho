@@ -56,6 +56,12 @@ enum Role {
   ADMIN
 }
 
+enum RefundStatus {
+  PENDING
+  PAID
+  REVERSED
+}
+
 model User {
   id            String                @id @default(uuid())
   email         String                @unique
@@ -65,6 +71,32 @@ model User {
   statusHistory ReturnStatusHistory[] @relation("ReturnStatusAuthor")
 
   @@map("users")
+}
+
+model Order {
+  id             String          @id @default(uuid())
+  itemsTotal     Decimal         @map("items_total") @db.Decimal(12, 2)
+  couponDiscount Decimal         @map("coupon_discount") @db.Decimal(12, 2)
+  shippingPaid   Decimal         @map("shipping_paid") @db.Decimal(12, 2)
+  amountPaid     Decimal         @map("amount_paid") @db.Decimal(12, 2)
+  amountRefunded Decimal         @default(0) @map("amount_refunded") @db.Decimal(12, 2)
+  items          OrderItem[]
+  returns        ReturnRequest[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String       @id @default(uuid())
+  orderId     String       @map("order_id")
+  productId   String       @map("product_id")
+  unitPrice   Decimal      @map("unit_price") @db.Decimal(12, 2)
+  quantity    Int
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  returnItems ReturnItem[]
+
+  @@index([orderId])
+  @@map("order_items")
 }
 
 model ReturnRequest {
@@ -85,9 +117,34 @@ model ReturnRequest {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
   customer              User                  @relation("ReturnCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  order                 Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  items                 ReturnItem[]
+  refunds               Refund[]
   statusHistory         ReturnStatusHistory[]
 
   @@map("return_requests")
+}
+
+model ReturnItem {
+  returnRequestId String        @map("return_request_id")
+  orderItemId     String        @map("order_item_id")
+  quantity        Int
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@id([returnRequestId, orderItemId])
+  @@index([orderItemId])
+  @@map("return_items")
+}
+
+model Refund {
+  id              String        @id @default(uuid())
+  returnRequestId String        @unique @map("return_request_id")
+  value           Decimal       @map("valor") @db.Decimal(12, 2)
+  status          RefundStatus  @default(PENDING)
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
+
+  @@map("refunds")
 }
 
 model ReturnStatusHistory {

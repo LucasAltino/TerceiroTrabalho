@@ -6,6 +6,7 @@ import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/retur
 import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
 import { TransitionRule } from '../../domain/transition/transition-rule';
 import { ReturnAction } from '../use-case/return-request.usecases';
+import { PayloadValidationError } from '../../domain/errors';
 import {
   CreateReturnRequestDto,
   ReturnRequestResponse,
@@ -32,7 +33,19 @@ export class ReturnRequestService
 
   async criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse> {
     if (dto.type !== 'DEVOLUTION' && dto.type !== 'EXCHANGE') {
-      throw new Error('Invalid return type');
+      throw new PayloadValidationError('Invalid return type');
+    }
+    if (
+      !Array.isArray(dto.items) ||
+      dto.items.length === 0 ||
+      dto.items.some(
+        (item) =>
+          typeof item.orderItemId !== 'string' ||
+          !Number.isInteger(item.quantity) ||
+          item.quantity <= 0,
+      )
+    ) {
+      throw new PayloadValidationError('At least one valid return item is required');
     }
     const dataAtual = new Date();
     const solicitacao = new ReturnRequestEntity({
@@ -54,7 +67,7 @@ export class ReturnRequestService
       updatedAt: dataAtual,
       deletedAt: null,
     });
-    return this.paraResposta(await this.repositorio.create(solicitacao));
+    return this.paraResposta(await this.repositorio.create(solicitacao, dto.items));
   }
 
   async buscarPorId(id: string): Promise<ReturnRequestResponse> {

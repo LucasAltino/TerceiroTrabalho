@@ -4,12 +4,14 @@ import { ReturnRequestPrismaRepository } from './infrastructure/adapters/return-
 import { ReturnRequestController } from './presentation/return-request.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ReturnPermissionsGuard } from './presentation/return-permissions.guard';
+import { ProportionalRefundCalculator } from './domain/refund/proportional-refund-calculator';
 
 @Module({
   imports: [AuthModule],
   controllers: [ReturnRequestController],
   providers: [
     ReturnPermissionsGuard,
+    { provide: 'REFUND_STRATEGY', useClass: ProportionalRefundCalculator },
     ReturnRequestPrismaRepository,
     { provide: 'RETURN_REQUEST_REPOSITORY', useExisting: ReturnRequestPrismaRepository },
     ReturnRequestService,
