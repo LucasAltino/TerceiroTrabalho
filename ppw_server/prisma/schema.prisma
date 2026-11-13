@@ -82,6 +82,7 @@ model Order {
   amountRefunded Decimal         @default(0) @map("amount_refunded") @db.Decimal(12, 2)
   items          OrderItem[]
   returns        ReturnRequest[]
+  reverseCodes   ReverseCode[]
 
   @@map("orders")
 }
@@ -121,6 +122,7 @@ model ReturnRequest {
   items                 ReturnItem[]
   refunds               Refund[]
   statusHistory         ReturnStatusHistory[]
+  reverseCode           ReverseCode?
 
   @@map("return_requests")
 }
@@ -145,6 +147,20 @@ model Refund {
   returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
 
   @@map("refunds")
+}
+
+model ReverseCode {
+  id              String        @id @default(uuid())
+  code            String        @unique
+  returnRequestId String        @unique @map("return_request_id")
+  orderId         String        @map("order_id")
+  expiresAt       DateTime      @map("expires_at")
+  usedAt          DateTime?     @map("used_at")
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("reverse_codes")
 }
 
 model ReturnStatusHistory {

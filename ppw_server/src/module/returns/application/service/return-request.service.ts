@@ -67,7 +67,8 @@ export class ReturnRequestService
       updatedAt: dataAtual,
       deletedAt: null,
     });
-    return this.paraResposta(await this.repositorio.create(solicitacao, dto.items));
+    const created = await this.repositorio.create(solicitacao, dto.items);
+    return { ...this.paraResposta(created.request), reverseCode: created.reverseCode };
   }
 
   async buscarPorId(id: string): Promise<ReturnRequestResponse> {
@@ -140,6 +141,10 @@ export class ReturnRequestService
       typeof suppliedJustification === 'string'
         ? suppliedJustification.trim()
         : `Action: ${regra.name}`;
+    const reverseCode =
+      acao === 'post' && isRecord(payload) && typeof payload.reverseCode === 'string'
+        ? payload.reverseCode.trim()
+        : undefined;
     const atualizada = await this.repositorio.updateWithVersion(
       transicionada,
       entidade.props.version,
@@ -147,6 +152,7 @@ export class ReturnRequestService
       entidade.props.status.getValue(),
       actorId,
       justification,
+      reverseCode,
     );
     return this.paraResposta(atualizada);
   }
@@ -158,4 +164,8 @@ export class ReturnRequestService
       status: solicitacao.status instanceof ReturnStatus ? solicitacao.status.getValue() : solicitacao.status,
     };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

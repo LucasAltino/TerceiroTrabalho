@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import {
   CreateReturnRequestDto,
+  PostReturnRequestDto,
   ReturnRequestResponse,
   UpdateReturnRequestDto,
 } from '../application/dto/return-request.dto';
@@ -96,7 +97,7 @@ export class ReturnRequestController {
   @HttpCode(HttpStatus.OK)
   postar(
     @Param('id') id: string,
-    @Body() payload: { trackingCode: string },
+    @Body() payload: PostReturnRequestDto,
     @Req() request: AuthenticatedRequest,
   ): Promise<ReturnRequestResponse> {
     return this.transitionReturn.transicionar(id, 'post', payload, request.user.id);

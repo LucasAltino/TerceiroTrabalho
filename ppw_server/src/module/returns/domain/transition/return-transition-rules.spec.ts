@@ -31,19 +31,30 @@ function makeEntity(status: ReturnStatusValue, overrides: Partial<ReturnRequestP
 describe('PostRule', () => {
   it('transitions REQUESTED → POSTED with trackingCode', () => {
     const e = makeEntity(ReturnStatusValue.REQUESTED);
-    const r = e.transition(PostRule, { trackingCode: '  TRK123  ' });
+    const r = e.transition(PostRule, { trackingCode: '  TRK123  ', reverseCode: 'CODE-123' });
     expect(r.props.status.getValue()).toBe(ReturnStatusValue.POSTED);
     expect(r.props.trackingCode).toBe('TRK123');
   });
 
   it('throws InvalidTransitionError from wrong status', () => {
     const e = makeEntity(ReturnStatusValue.RECEIVED);
-    expect(() => e.transition(PostRule, { trackingCode: 'TRK' })).toThrow(InvalidTransitionError);
+    expect(() => e.transition(PostRule, { trackingCode: 'TRK', reverseCode: 'CODE' })).toThrow(
+      InvalidTransitionError,
+    );
   });
 
   it('throws PayloadValidationError when trackingCode is empty', () => {
     const e = makeEntity(ReturnStatusValue.REQUESTED);
-    expect(() => e.transition(PostRule, { trackingCode: '  ' })).toThrow(PayloadValidationError);
+    expect(() =>
+      e.transition(PostRule, { trackingCode: '  ', reverseCode: 'CODE' }),
+    ).toThrow(PayloadValidationError);
+  });
+
+  it('requires a reverse code', () => {
+    const e = makeEntity(ReturnStatusValue.REQUESTED);
+    expect(() => e.transition(PostRule, { trackingCode: 'TRK123', reverseCode: ' ' })).toThrow(
+      PayloadValidationError,
+    );
   });
 });
 

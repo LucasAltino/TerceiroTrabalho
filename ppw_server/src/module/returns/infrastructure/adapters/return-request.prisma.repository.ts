@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, RefundStatus, ReturnRequest, ReturnStatus } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { ReturnRequestEntity } from '../../domain/entity/return-request.entity';
-import { ReturnRequestRepository } from '../../domain/ports/return-request.repository';
+import { CreatedReturnRequest, ReturnRequestRepository } from '../../domain/ports/return-request.repository';
 import { ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import { PayloadValidationError, VersionConflictError } from '../../domain/errors';
 import { ReturnQuantity, RefundCalculationInput, RefundStrategy } from '../../domain/refund/refund-strategy';
@@ -15,7 +16,7 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     @Inject('REFUND_STRATEGY') private readonly refundStrategy: RefundStrategy,
   ) {}
 
-  async create(solicitacao: ReturnRequestEntity, items: ReturnQuantity[]): Promise<ReturnRequest> {
+  async create(solicitacao: ReturnRequestEntity, items: ReturnQuantity[]): Promise<CreatedReturnRequest> {
     const { id, orderId, customerId, productId, type, reason, description, trackingCode } = solicitacao.props;
     return this.prisma.$transaction(async (transaction) => {
       const order = await transaction.order.findUnique({
@@ -44,7 +45,7 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
         }
       }
 
-      return transaction.returnRequest.create({
+      const request = await transaction.returnRequest.create({
         data: {
           id,
           orderId,
@@ -62,6 +63,16 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
           },
         },
       });
+      const reverseCode = randomBytes(32).toString('base64url');
+      await transaction.reverseCode.create({
+        data: {
+          code: reverseCode,
+          returnRequestId: id,
+          orderId,
+          expiresAt: this.reverseCodeExpiry(),
+        },
+      });
+      return { request, reverseCode };
     });
   }
 
@@ -95,9 +106,15 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     previousStatus: ReturnStatusValue,
     actorId: string,
     justification: string,
+    reverseCode?: string,
   ): Promise<ReturnRequest> {
     const data = request.props;
     return this.prisma.$transaction(async (transaction) => {
+      if (data.status.getValue() === ReturnStatusValue.POSTED) {
+        if (!reverseCode) throw new PayloadValidationError('Reverse code is required to post a return');
+        await this.useReverseCode(transaction, data.id, data.orderId, reverseCode);
+      }
+
       const result = await transaction.returnRequest.updateMany({
         where: {
           id: data.id,
@@ -227,6 +244,54 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
         status: RefundStatus.PENDING,
       },
     });
+  }
+
+  private reverseCodeExpiry(): Date {
+    const rawDays = process.env.RETURN_CODE_TTL_DAYS;
+    const days = rawDays === undefined ? 7 : Number(rawDays);
+    if (!Number.isSafeInteger(days) || days <= 0) {
+      throw new Error('RETURN_CODE_TTL_DAYS must be a positive integer');
+    }
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    if (!Number.isFinite(expiresAt.getTime())) {
+      throw new Error('RETURN_CODE_TTL_DAYS is outside the supported date range');
+    }
+    return expiresAt;
+  }
+
+  private async useReverseCode(
+    transaction: Prisma.TransactionClient,
+    returnRequestId: string,
+    orderId: string,
+    code: string,
+  ): Promise<void> {
+    const reverseCode = await transaction.reverseCode.findUnique({ where: { code } });
+    if (
+      !reverseCode ||
+      reverseCode.returnRequestId !== returnRequestId ||
+      reverseCode.orderId !== orderId
+    ) {
+      throw new PayloadValidationError('Reverse code is invalid');
+    }
+    if (reverseCode.usedAt) {
+      throw new VersionConflictError('Reverse code has already been used');
+    }
+
+    const now = new Date();
+    if (reverseCode.expiresAt <= now) {
+      throw new PayloadValidationError('Reverse code has expired');
+    }
+    const claimed = await transaction.reverseCode.updateMany({
+      where: { id: reverseCode.id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    if (claimed.count === 0) {
+      const latest = await transaction.reverseCode.findUnique({ where: { id: reverseCode.id } });
+      if (latest?.usedAt) {
+        throw new VersionConflictError('Reverse code has already been used');
+      }
+      throw new PayloadValidationError('Reverse code has expired or is invalid');
+    }
   }
 }
 

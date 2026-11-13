@@ -2,7 +2,7 @@ import { PayloadValidationError } from '../errors';
 import { ReturnStatusValue } from '../value-object/return-status.value.object';
 import { TransitionRule } from './transition-rule';
 
-export type PostPayload = { trackingCode: string };
+export type PostPayload = { trackingCode: string; reverseCode: string };
 export type ReceivePayload = Record<string, never>;
 export type StartInspectionPayload = Record<string, never>;
 export type ApprovePayload = { inspectionResult: string };
@@ -23,6 +23,7 @@ export const PostRule: TransitionRule<PostPayload> = {
   to: ReturnStatusValue.POSTED,
   validate(payload) {
     requireTrimmed(payload?.trackingCode, 'trackingCode');
+    requireTrimmed(payload?.reverseCode, 'reverseCode');
   },
   apply(_entity, payload) {
     return { trackingCode: payload.trackingCode.trim() };

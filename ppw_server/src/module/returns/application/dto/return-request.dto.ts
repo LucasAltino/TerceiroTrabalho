@@ -22,6 +22,11 @@ export class InspectReturnRequestDto {
   rejectionReason?: string;
 }
 
+export class PostReturnRequestDto {
+  trackingCode!: string;
+  reverseCode!: string;
+}
+
 export type ReturnRequestResponse = {
   id: string;
   orderId: string;
@@ -37,6 +42,7 @@ export type ReturnRequestResponse = {
   adjustmentRequestedAt: Date | null;
   adjustmentReason: string | null;
   version: number;
+  reverseCode?: string;
   createdAt: Date;
   updatedAt: Date;
 };
