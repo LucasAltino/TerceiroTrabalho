@@ -94,24 +94,31 @@ export class ReturnRequestController {
   @RequireReturnAction('post')
   @UseGuards(ReturnPermissionsGuard)
   @HttpCode(HttpStatus.OK)
-  postar(@Param('id') id: string, @Body() payload: { trackingCode: string }): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'post', payload);
+  postar(
+    @Param('id') id: string,
+    @Body() payload: { trackingCode: string },
+    @Req() request: AuthenticatedRequest,
+  ): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'post', payload, request.user.id);
   }
 
   @Post(':id/receive')
   @RequireReturnAction('receive')
   @UseGuards(ReturnPermissionsGuard)
   @HttpCode(HttpStatus.OK)
-  receber(@Param('id') id: string): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'receive', {});
+  receber(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'receive', {}, request.user.id);
   }
 
   @Post(':id/start-inspection')
   @RequireReturnAction('startInspection')
   @UseGuards(ReturnPermissionsGuard)
   @HttpCode(HttpStatus.OK)
-  iniciarInspecao(@Param('id') id: string): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'startInspection', {});
+  iniciarInspecao(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'startInspection', {}, request.user.id);
   }
 
   @Post(':id/approve')
@@ -121,8 +128,9 @@ export class ReturnRequestController {
   aprovar(
     @Param('id') id: string,
     @Body() payload: { inspectionResult: string },
+    @Req() request: AuthenticatedRequest,
   ): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'approve', payload);
+    return this.transitionReturn.transicionar(id, 'approve', payload, request.user.id);
   }
 
   @Post(':id/reject')
@@ -132,8 +140,9 @@ export class ReturnRequestController {
   rejeitar(
     @Param('id') id: string,
     @Body() payload: { rejectionReason: string },
+    @Req() request: AuthenticatedRequest,
   ): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'reject', payload);
+    return this.transitionReturn.transicionar(id, 'reject', payload, request.user.id);
   }
 
   @Post(':id/request-adjustment')
@@ -143,23 +152,28 @@ export class ReturnRequestController {
   solicitarAjuste(
     @Param('id') id: string,
     @Body() payload: { adjustmentReason: string },
+    @Req() request: AuthenticatedRequest,
   ): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'requestAdjustment', payload);
+    return this.transitionReturn.transicionar(id, 'requestAdjustment', payload, request.user.id);
   }
 
   @Post(':id/complete')
   @RequireReturnAction('complete')
   @UseGuards(ReturnPermissionsGuard)
   @HttpCode(HttpStatus.OK)
-  concluir(@Param('id') id: string): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'complete', {});
+  concluir(@Param('id') id: string, @Req() request: AuthenticatedRequest): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'complete', {}, request.user.id);
   }
 
   @Post(':id/cancel')
   @RequireReturnAction('cancel')
   @UseGuards(ReturnPermissionsGuard)
   @HttpCode(HttpStatus.OK)
-  cancelar(@Param('id') id: string, @Body() payload: { justification: string }): Promise<ReturnRequestResponse> {
-    return this.transitionReturn.transicionar(id, 'cancel', payload);
+  cancelar(
+    @Param('id') id: string,
+    @Body() payload: { justification: string },
+    @Req() request: AuthenticatedRequest,
+  ): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'cancel', payload, request.user.id);
   }
 }

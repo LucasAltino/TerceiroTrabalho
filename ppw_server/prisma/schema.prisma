@@ -57,33 +57,50 @@ enum Role {
 }
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
-  passwordHash String          @map("password_hash")
-  role         Role
-  returns      ReturnRequest[] @relation("ReturnCustomer")
+  id            String                @id @default(uuid())
+  email         String                @unique
+  passwordHash  String                @map("password_hash")
+  role          Role
+  returns       ReturnRequest[]       @relation("ReturnCustomer")
+  statusHistory ReturnStatusHistory[] @relation("ReturnStatusAuthor")
 
   @@map("users")
 }
 
 model ReturnRequest {
-  id                    String       @id
-  orderId               String       @map("order_id")
-  customerId            String       @map("customer_id")
-  productId             String       @map("product_id")
+  id                    String                @id
+  orderId               String                @map("order_id")
+  customerId            String                @map("customer_id")
+  productId             String                @map("product_id")
   type                  ReturnType
   reason                String
   description           String
-  status                ReturnStatus @default(REQUESTED)
-  trackingCode          String?      @map("tracking_code")
-  inspectionResult      String?      @map("inspection_result")
-  rejectionReason       String?      @map("rejection_reason")
-  adjustmentRequestedAt DateTime?    @map("adjustment_requested_at")
-  adjustmentReason      String?      @map("adjustment_reason")
-  version               Int          @default(0)
-  createdAt             DateTime     @default(now()) @map("created_at")
-  updatedAt             DateTime     @updatedAt @map("updated_at")
-  customer              User         @relation("ReturnCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  status                ReturnStatus          @default(REQUESTED)
+  trackingCode          String?               @map("tracking_code")
+  inspectionResult      String?               @map("inspection_result")
+  rejectionReason       String?               @map("rejection_reason")
+  adjustmentRequestedAt DateTime?             @map("adjustment_requested_at")
+  adjustmentReason      String?               @map("adjustment_reason")
+  version               Int                   @default(0)
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  customer              User                  @relation("ReturnCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  statusHistory         ReturnStatusHistory[]
 
   @@map("return_requests")
+}
+
+model ReturnStatusHistory {
+  idRegistro      String        @id @default(uuid()) @map("id_registro")
+  returnRequestId String        @map("return_request_id")
+  estadoAnterior  ReturnStatus  @map("estado_anterior")
+  novoEstado      ReturnStatus  @map("novo_estado")
+  autorId         String        @map("autor_id")
+  justificativa   String
+  timestamp       DateTime      @default(now())
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Restrict)
+  author          User          @relation("ReturnStatusAuthor", fields: [autorId], references: [id], onDelete: Restrict)
+
+  @@index([returnRequestId, timestamp])
+  @@map("return_status_history")
 }

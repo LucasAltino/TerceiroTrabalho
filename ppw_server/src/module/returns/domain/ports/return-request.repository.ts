@@ -11,5 +11,8 @@ export interface ReturnRequestRepository {
     request: ReturnRequestEntity,
     expectedVersion: number,
     from: ReturnStatusValue[],
+    previousStatus: ReturnStatusValue,
+    actorId: string,
+    justification: string,
   ): Promise<ReturnRequest>;
 }

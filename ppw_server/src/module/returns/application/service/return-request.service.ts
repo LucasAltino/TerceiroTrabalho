@@ -5,6 +5,7 @@ import { ReturnRequestRepository } from '../../domain/ports/return-request.repos
 import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
 import { TransitionRule } from '../../domain/transition/transition-rule';
+import { ReturnAction } from '../use-case/return-request.usecases';
 import {
   CreateReturnRequestDto,
   ReturnRequestResponse,
@@ -84,11 +85,15 @@ export class ReturnRequestService
 
   async transicionar(
     id: string,
-    acao: keyof typeof TRANSITION_RULES,
+    acao: ReturnAction,
     payload: unknown,
+    actorId: string,
   ): Promise<ReturnRequestResponse> {
     const entidade = this.paraEntidade(await this.buscarObrigatoria(id));
-    return this.transicionarEntidade(entidade, TRANSITION_RULES[acao], payload);
+    if (acao === 'create' || acao === 'list' || acao === 'read' || acao === 'update') {
+      throw new Error(`Unsupported return transition action: ${acao}`);
+    }
+    return this.transicionarEntidade(entidade, acao, TRANSITION_RULES[acao], payload, actorId);
   }
 
   private async buscarObrigatoria(id: string) {
@@ -103,14 +108,32 @@ export class ReturnRequestService
 
   private async transicionarEntidade(
     entidade: ReturnRequestEntity,
+    acao: keyof typeof TRANSITION_RULES,
     regra: TransitionRule<any>,
     payload: unknown,
+    actorId: string,
   ): Promise<ReturnRequestResponse> {
     const transicionada = entidade.transition(regra, payload);
+    const auditFields: Partial<Record<keyof typeof TRANSITION_RULES, string>> = {
+      reject: 'rejectionReason',
+      requestAdjustment: 'adjustmentReason',
+      cancel: 'justification',
+    };
+    const field = auditFields[acao];
+    const payloadObject =
+      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+    const suppliedJustification = field ? payloadObject[field] : undefined;
+    const justification =
+      typeof suppliedJustification === 'string'
+        ? suppliedJustification.trim()
+        : `Action: ${regra.name}`;
     const atualizada = await this.repositorio.updateWithVersion(
       transicionada,
       entidade.props.version,
       regra.from,
+      entidade.props.status.getValue(),
+      actorId,
+      justification,
     );
     return this.paraResposta(atualizada);
   }

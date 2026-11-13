@@ -44,32 +44,47 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     request: ReturnRequestEntity,
     expectedVersion: number,
     from: ReturnStatusValue[],
+    previousStatus: ReturnStatusValue,
+    actorId: string,
+    justification: string,
   ): Promise<ReturnRequest> {
     const data = request.props;
-    const result = await this.prisma.returnRequest.updateMany({
-      where: {
-        id: data.id,
-        version: expectedVersion,
-        status: { in: from },
-      },
-      data: {
-        status: data.status.getValue(),
-        version: { increment: 1 },
-        trackingCode: data.trackingCode ?? null,
-        inspectionResult: data.inspectionResult ?? null,
-        rejectionReason: data.rejectionReason ?? null,
-        adjustmentRequestedAt: data.adjustmentRequestedAt ?? null,
-        adjustmentReason: data.adjustmentReason ?? null,
-        updatedAt: new Date(),
-      },
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.returnRequest.updateMany({
+        where: {
+          id: data.id,
+          version: expectedVersion,
+          status: { in: from },
+        },
+        data: {
+          status: data.status.getValue(),
+          version: { increment: 1 },
+          trackingCode: data.trackingCode ?? null,
+          inspectionResult: data.inspectionResult ?? null,
+          rejectionReason: data.rejectionReason ?? null,
+          adjustmentRequestedAt: data.adjustmentRequestedAt ?? null,
+          adjustmentReason: data.adjustmentReason ?? null,
+          updatedAt: new Date(),
+        },
+      });
+
+      if (result.count === 0) {
+        throw new VersionConflictError('Return request was changed by another operation');
+      }
+
+      await transaction.returnStatusHistory.create({
+        data: {
+          returnRequestId: data.id,
+          estadoAnterior: previousStatus,
+          novoEstado: data.status.getValue(),
+          autorId: actorId,
+          justificativa: justification,
+        },
+      });
+
+      const updated = await transaction.returnRequest.findUnique({ where: { id: data.id } });
+      if (!updated) throw new Error('Return request disappeared after a successful update');
+      return updated;
     });
-
-    if (result.count === 0) {
-      throw new VersionConflictError('Return request was changed by another operation');
-    }
-
-    const updated = await this.prisma.returnRequest.findUnique({ where: { id: data.id } });
-    if (!updated) throw new Error('Return request disappeared after a successful update');
-    return updated;
   }
 }

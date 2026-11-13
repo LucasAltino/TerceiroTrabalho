@@ -5,6 +5,13 @@ import {
 } from '../dto/return-request.dto';
 import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
 
+export type ReturnAction =
+  | keyof typeof TRANSITION_RULES
+  | 'create'
+  | 'list'
+  | 'read'
+  | 'update';
+
 export interface CreateReturnRequestUseCase {
   criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse>;
 }
@@ -24,7 +31,8 @@ export interface UpdateReturnRequestUseCase {
 export interface TransitionReturnRequestUseCase {
   transicionar(
     id: string,
-    action: keyof typeof TRANSITION_RULES,
+    action: ReturnAction,
     payload: unknown,
+    actorId: string,
   ): Promise<ReturnRequestResponse>;
 }

@@ -39,12 +39,15 @@ describe('ReturnRequestService concurrency', () => {
     };
     const service = new ReturnRequestService(repository);
 
-    await service.transicionar('rr-1', 'approve', { inspectionResult: '  Looks good  ' });
+    await service.transicionar('rr-1', 'approve', { inspectionResult: '  Looks good  ' }, 'inspector-1');
 
     expect(repository.updateWithVersion).toHaveBeenCalledWith(
       expect.objectContaining({ props: expect.objectContaining({ status: expect.anything() }) }),
       7,
       [ReturnStatusValue.INSPECTING],
+      ReturnStatusValue.INSPECTING,
+      'inspector-1',
+      'Action: approve',
     );
   });
 
@@ -59,7 +62,7 @@ describe('ReturnRequestService concurrency', () => {
     const service = new ReturnRequestService(repository);
 
     await expect(
-      service.transicionar('rr-1', 'approve', { inspectionResult: 'Looks good' }),
+      service.transicionar('rr-1', 'approve', { inspectionResult: 'Looks good' }, 'inspector-1'),
     ).rejects.toBeInstanceOf(VersionConflictError);
   });
 });
