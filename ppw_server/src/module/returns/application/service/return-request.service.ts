@@ -3,28 +3,19 @@ import { randomUUID } from 'crypto';
 import { ReturnRequestEntity, ReturnTypeValue } from '../../domain/entity/return-request.entity';
 import { ReturnRequestRepository } from '../../domain/ports/return-request.repository';
 import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
-import {
-  ApproveRule,
-  RejectRule,
-  StartInspectionRule,
-  TRANSITION_RULES,
-} from '../../domain/transition/return-transition-rules';
+import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
 import { TransitionRule } from '../../domain/transition/transition-rule';
 import {
   CreateReturnRequestDto,
-  InspectReturnRequestDto,
   ReturnRequestResponse,
   UpdateReturnRequestDto,
-  UpdateReturnStatusDto,
 } from '../dto/return-request.dto';
 import {
   CreateReturnRequestUseCase,
-  DeleteReturnRequestUseCase,
   GetReturnRequestUseCase,
-  InspectReturnRequestUseCase,
   ListReturnRequestsUseCase,
+  TransitionReturnRequestUseCase,
   UpdateReturnRequestUseCase,
-  UpdateReturnStatusUseCase,
 } from '../use-case/return-request.usecases';
 
 @Injectable()
@@ -34,9 +25,7 @@ export class ReturnRequestService
     GetReturnRequestUseCase,
     ListReturnRequestsUseCase,
     UpdateReturnRequestUseCase,
-    UpdateReturnStatusUseCase,
-    InspectReturnRequestUseCase,
-    DeleteReturnRequestUseCase
+    TransitionReturnRequestUseCase
 {
   constructor(@Inject('RETURN_REQUEST_REPOSITORY') private readonly repositorio: ReturnRequestRepository) {}
 
@@ -93,21 +82,6 @@ export class ReturnRequestService
     return this.paraResposta(atualizada);
   }
 
-  async atualizarStatus(id: string, dto: UpdateReturnStatusDto): Promise<ReturnRequestResponse> {
-    const solicitacaoAtual = await this.buscarObrigatoria(id);
-    const entidade = this.paraEntidade(solicitacaoAtual);
-    const regra = Object.values(TRANSITION_RULES).find((candidate) => candidate.to === dto.status);
-    if (!regra) throw new Error(`Unsupported return status transition: ${dto.status}`);
-    const payload = {
-      trackingCode: entidade.props.trackingCode ?? '',
-      inspectionResult: entidade.props.inspectionResult ?? '',
-      rejectionReason: entidade.props.rejectionReason ?? '',
-      adjustmentReason: entidade.props.adjustmentReason ?? '',
-      justification: '',
-    };
-    return this.transicionarEntidade(entidade, regra, payload);
-  }
-
   async transicionar(
     id: string,
     acao: keyof typeof TRANSITION_RULES,
@@ -115,20 +89,6 @@ export class ReturnRequestService
   ): Promise<ReturnRequestResponse> {
     const entidade = this.paraEntidade(await this.buscarObrigatoria(id));
     return this.transicionarEntidade(entidade, TRANSITION_RULES[acao], payload);
-  }
-
-  async registrarInspecao(id: string, dto: InspectReturnRequestDto): Promise<ReturnRequestResponse> {
-    const solicitacaoAtual = await this.buscarObrigatoria(id);
-    const emInspecao = this.paraEntidade(solicitacaoAtual).transition(StartInspectionRule, {});
-    const solicitacaoInspecionada = dto.approved
-      ? emInspecao.transition(ApproveRule, { inspectionResult: dto.result })
-      : emInspecao.transition(RejectRule, { rejectionReason: dto.rejectionReason ?? dto.result });
-    return this.paraResposta(await this.repositorio.update(solicitacaoInspecionada));
-  }
-
-  async excluir(id: string): Promise<void> {
-    await this.buscarObrigatoria(id);
-    await this.repositorio.delete(id);
   }
 
   private async buscarObrigatoria(id: string) {

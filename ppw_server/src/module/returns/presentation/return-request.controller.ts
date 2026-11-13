@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -13,90 +12,117 @@ import {
 } from '@nestjs/common';
 import {
   CreateReturnRequestDto,
-  InspectReturnRequestDto,
   ReturnRequestResponse,
   UpdateReturnRequestDto,
-  UpdateReturnStatusDto,
 } from '../application/dto/return-request.dto';
 import {
   CreateReturnRequestUseCase,
-  DeleteReturnRequestUseCase,
   GetReturnRequestUseCase,
-  InspectReturnRequestUseCase,
   ListReturnRequestsUseCase,
+  TransitionReturnRequestUseCase,
   UpdateReturnRequestUseCase,
-  UpdateReturnStatusUseCase,
 } from '../application/use-case/return-request.usecases';
 
 @Controller('returns')
 export class ReturnRequestController {
   constructor(
     @Inject('CREATE_RETURN_REQUEST_USECASE')
-    private readonly casoCriar: CreateReturnRequestUseCase,
+    private readonly createReturn: CreateReturnRequestUseCase,
     @Inject('GET_RETURN_REQUEST_USECASE')
-    private readonly casoBuscar: GetReturnRequestUseCase,
+    private readonly getReturn: GetReturnRequestUseCase,
     @Inject('LIST_RETURN_REQUESTS_USECASE')
-    private readonly casoListar: ListReturnRequestsUseCase,
+    private readonly listReturns: ListReturnRequestsUseCase,
     @Inject('UPDATE_RETURN_REQUEST_USECASE')
-    private readonly casoAtualizar: UpdateReturnRequestUseCase,
-    @Inject('UPDATE_RETURN_STATUS_USECASE')
-    private readonly casoAtualizarStatus: UpdateReturnStatusUseCase,
-    @Inject('INSPECT_RETURN_REQUEST_USECASE')
-    private readonly casoInspecionar: InspectReturnRequestUseCase,
-    @Inject('DELETE_RETURN_REQUEST_USECASE')
-    private readonly casoExcluir: DeleteReturnRequestUseCase,
+    private readonly updateReturn: UpdateReturnRequestUseCase,
+    @Inject('TRANSITION_RETURN_REQUEST_USECASE')
+    private readonly transitionReturn: TransitionReturnRequestUseCase,
   ) {}
 
   @Get()
-  async listar(): Promise<ReturnRequestResponse[]> {
-    return this.casoListar.listarTodos();
+  listar(): Promise<ReturnRequestResponse[]> {
+    return this.listReturns.listarTodos();
   }
 
   @Post()
-  async criar(@Body() dados: CreateReturnRequestDto): Promise<ReturnRequestResponse> {
-    return this.casoCriar.criar(dados);
+  criar(@Body() dados: CreateReturnRequestDto): Promise<ReturnRequestResponse> {
+    return this.createReturn.criar(dados);
   }
 
   @Get(':id')
-  async buscar(@Param('id') id: string): Promise<ReturnRequestResponse> {
-    return this.casoBuscar.buscarPorId(id);
+  buscar(@Param('id') id: string): Promise<ReturnRequestResponse> {
+    return this.getReturn.buscarPorId(id);
   }
 
   @Put(':id')
-  async atualizar(
+  atualizar(
     @Param('id') id: string,
     @Body() dados: UpdateReturnRequestDto,
   ): Promise<ReturnRequestResponse> {
-    return this.casoAtualizar.atualizar(id, dados);
+    return this.updateReturn.atualizar(id, dados);
   }
 
   @Patch(':id')
-  async atualizarPatch(
+  atualizarPatch(
     @Param('id') id: string,
     @Body() dados: UpdateReturnRequestDto,
   ): Promise<ReturnRequestResponse> {
-    return this.casoAtualizar.atualizar(id, dados);
+    return this.updateReturn.atualizar(id, dados);
   }
 
-  @Patch(':id/status')
-  async atualizarStatus(
+  @Post(':id/post')
+  @HttpCode(HttpStatus.OK)
+  postar(@Param('id') id: string, @Body() payload: { trackingCode: string }): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'post', payload);
+  }
+
+  @Post(':id/receive')
+  @HttpCode(HttpStatus.OK)
+  receber(@Param('id') id: string): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'receive', {});
+  }
+
+  @Post(':id/start-inspection')
+  @HttpCode(HttpStatus.OK)
+  iniciarInspecao(@Param('id') id: string): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'startInspection', {});
+  }
+
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  aprovar(
     @Param('id') id: string,
-    @Body() dados: UpdateReturnStatusDto,
+    @Body() payload: { inspectionResult: string },
   ): Promise<ReturnRequestResponse> {
-    return this.casoAtualizarStatus.atualizarStatus(id, dados);
+    return this.transitionReturn.transicionar(id, 'approve', payload);
   }
 
-  @Patch(':id/inspection')
-  async inspecionar(
+  @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  rejeitar(
     @Param('id') id: string,
-    @Body() dados: InspectReturnRequestDto,
+    @Body() payload: { rejectionReason: string },
   ): Promise<ReturnRequestResponse> {
-    return this.casoInspecionar.registrarInspecao(id, dados);
+    return this.transitionReturn.transicionar(id, 'reject', payload);
   }
 
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async excluir(@Param('id') id: string): Promise<void> {
-    await this.casoExcluir.excluir(id);
+  @Post(':id/request-adjustment')
+  @HttpCode(HttpStatus.OK)
+  solicitarAjuste(
+    @Param('id') id: string,
+    @Body() payload: { adjustmentReason: string },
+  ): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'requestAdjustment', payload);
+  }
+
+  @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
+  concluir(@Param('id') id: string): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'complete', {});
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  cancelar(@Param('id') id: string, @Body() payload: { justification: string }): Promise<ReturnRequestResponse> {
+    return this.transitionReturn.transicionar(id, 'cancel', payload);
   }
 }

@@ -71,8 +71,4 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     if (!updated) throw new Error('Return request disappeared after a successful update');
     return updated;
   }
-
-  async delete(id: string): Promise<void> {
-    await this.prisma.returnRequest.delete({ where: { id } });
-  }
 }

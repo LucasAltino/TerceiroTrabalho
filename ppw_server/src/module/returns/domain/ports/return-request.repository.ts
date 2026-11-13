@@ -12,5 +12,4 @@ export interface ReturnRequestRepository {
     expectedVersion: number,
     from: ReturnStatusValue[],
   ): Promise<ReturnRequest>;
-  delete(id: string): Promise<void>;
 }

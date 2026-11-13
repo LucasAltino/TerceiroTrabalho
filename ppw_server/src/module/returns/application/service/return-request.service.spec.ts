@@ -36,7 +36,6 @@ describe('ReturnRequestService concurrency', () => {
         ...request(ReturnStatusValue.APPROVED, 8),
         inspectionResult: 'Looks good',
       }),
-      delete: jest.fn(),
     };
     const service = new ReturnRequestService(repository);
 
@@ -56,7 +55,6 @@ describe('ReturnRequestService concurrency', () => {
       findAll: jest.fn(),
       update: jest.fn(),
       updateWithVersion: jest.fn().mockRejectedValue(new VersionConflictError('conflict')),
-      delete: jest.fn(),
     };
     const service = new ReturnRequestService(repository);
 
