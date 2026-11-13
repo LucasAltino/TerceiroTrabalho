@@ -1,18 +1,17 @@
-import { ReturnRequest } from '@prisma/client';
-import { ReturnRequestEntity } from '../entity/return-request.entity';
+import { ReturnRequestEntity, ReturnRequestRecord } from '../entity/return-request.entity';
 import { ReturnStatusValue } from '../value-object/return-status.value.object';
 import { ReturnQuantity } from '../refund/refund-strategy';
 
 export type CreatedReturnRequest = {
-  request: ReturnRequest;
+  request: ReturnRequestRecord;
   reverseCode: string;
 };
 
 export interface ReturnRequestRepository {
   create(request: ReturnRequestEntity, items: ReturnQuantity[]): Promise<CreatedReturnRequest>;
-  findById(id: string): Promise<ReturnRequest | null>;
-  findAll(customerId?: string): Promise<ReturnRequest[]>;
-  update(request: ReturnRequestEntity): Promise<ReturnRequest>;
+  findById(id: string): Promise<ReturnRequestRecord | null>;
+  findAll(customerId?: string): Promise<ReturnRequestRecord[]>;
+  update(request: ReturnRequestEntity): Promise<ReturnRequestRecord>;
   updateWithVersion(
     request: ReturnRequestEntity,
     expectedVersion: number,
@@ -21,5 +20,5 @@ export interface ReturnRequestRepository {
     actorId: string,
     justification: string,
     reverseCode?: string,
-  ): Promise<ReturnRequest>;
+  ): Promise<ReturnRequestRecord>;
 }

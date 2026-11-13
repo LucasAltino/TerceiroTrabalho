@@ -10,6 +10,15 @@ export type RejectPayload = { rejectionReason: string };
 export type RequestAdjustmentPayload = { adjustmentReason: string };
 export type CompletePayload = Record<string, never>;
 export type CancelPayload = { justification: string };
+export type TransitionPayload =
+  | PostPayload
+  | ReceivePayload
+  | StartInspectionPayload
+  | ApprovePayload
+  | RejectPayload
+  | RequestAdjustmentPayload
+  | CompletePayload
+  | CancelPayload;
 
 function requireTrimmed(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -118,7 +127,17 @@ export const CancelRule: TransitionRule<CancelPayload> = {
   },
 };
 
-export const TRANSITION_RULES: Record<string, TransitionRule<any>> = {
+export const TRANSITION_RULES: Record<
+  | 'post'
+  | 'receive'
+  | 'startInspection'
+  | 'approve'
+  | 'reject'
+  | 'requestAdjustment'
+  | 'complete'
+  | 'cancel',
+  TransitionRule<TransitionPayload>
+> = {
   post: PostRule,
   receive: ReceiveRule,
   startInspection: StartInspectionRule,

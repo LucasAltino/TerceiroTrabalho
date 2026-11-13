@@ -48,6 +48,7 @@ describe('ReturnRequestService concurrency', () => {
       ReturnStatusValue.INSPECTING,
       'inspector-1',
       'Action: approve',
+      undefined,
     );
   });
 

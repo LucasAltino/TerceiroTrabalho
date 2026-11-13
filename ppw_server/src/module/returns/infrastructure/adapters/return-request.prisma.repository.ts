@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, RefundStatus, ReturnRequest, ReturnStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { ReturnRequestEntity } from '../../domain/entity/return-request.entity';
+import { ReturnRequestEntity, ReturnRequestRecord } from '../../domain/entity/return-request.entity';
 import { CreatedReturnRequest, ReturnRequestRepository } from '../../domain/ports/return-request.repository';
 import { ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import { PayloadValidationError, VersionConflictError } from '../../domain/errors';
@@ -72,24 +72,26 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
           expiresAt: this.reverseCodeExpiry(),
         },
       });
-      return { request, reverseCode };
+      return { request: toRecord(request), reverseCode };
     });
   }
 
-  async findById(id: string): Promise<ReturnRequest | null> {
-    return this.prisma.returnRequest.findUnique({ where: { id } });
+  async findById(id: string): Promise<ReturnRequestRecord | null> {
+    const request = await this.prisma.returnRequest.findUnique({ where: { id } });
+    return request ? toRecord(request) : null;
   }
 
-  async findAll(customerId?: string): Promise<ReturnRequest[]> {
-    return this.prisma.returnRequest.findMany({
+  async findAll(customerId?: string): Promise<ReturnRequestRecord[]> {
+    const requests = await this.prisma.returnRequest.findMany({
       where: customerId ? { customerId } : undefined,
       orderBy: { createdAt: 'desc' },
     });
+    return requests.map(toRecord);
   }
 
-  async update(solicitacao: ReturnRequestEntity): Promise<ReturnRequest> {
+  async update(solicitacao: ReturnRequestEntity): Promise<ReturnRequestRecord> {
     const dados = solicitacao.props;
-    return this.prisma.returnRequest.update({
+    const updated = await this.prisma.returnRequest.update({
       where: { id: dados.id },
       data: {
         reason: dados.reason,
@@ -97,6 +99,7 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
         trackingCode: dados.trackingCode ?? null,
       },
     });
+    return toRecord(updated);
   }
 
   async updateWithVersion(
@@ -107,7 +110,7 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     actorId: string,
     justification: string,
     reverseCode?: string,
-  ): Promise<ReturnRequest> {
+  ): Promise<ReturnRequestRecord> {
     const data = request.props;
     return this.prisma.$transaction(async (transaction) => {
       if (data.status.getValue() === ReturnStatusValue.POSTED) {
@@ -163,7 +166,7 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
 
       const updated = await transaction.returnRequest.findUnique({ where: { id: data.id } });
       if (!updated) throw new Error('Return request disappeared after a successful update');
-      return updated;
+      return toRecord(updated);
     });
   }
 
@@ -341,6 +344,27 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
       throw new VersionConflictError('Order refund balance was changed by another operation');
     }
   }
+}
+
+function toRecord(request: ReturnRequest): ReturnRequestRecord {
+  return {
+    id: request.id,
+    orderId: request.orderId,
+    customerId: request.customerId,
+    productId: request.productId,
+    type: request.type === 'EXCHANGE' ? 'EXCHANGE' : 'DEVOLUTION',
+    reason: request.reason,
+    description: request.description,
+    status: request.status,
+    trackingCode: request.trackingCode,
+    inspectionResult: request.inspectionResult,
+    rejectionReason: request.rejectionReason,
+    adjustmentRequestedAt: request.adjustmentRequestedAt,
+    adjustmentReason: request.adjustmentReason,
+    version: request.version,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+  };
 }
 
 function decimalToCents(value: Prisma.Decimal): bigint {

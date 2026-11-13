@@ -22,6 +22,12 @@ export type ReturnRequestProps = {
   version: number;
 } & DefaultTimeStampProps;
 
+export type ReturnRequestRecord = Omit<ReturnRequestProps, 'status'> & {
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export class ReturnRequestEntity extends BaseEntity<ReturnRequestProps> {
   constructor(props: ReturnRequestProps) {
     super(props);

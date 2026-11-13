@@ -16,12 +16,6 @@ export class UpdateReturnRequestDto {
   trackingCode?: string | null;
 }
 
-export class InspectReturnRequestDto {
-  approved!: boolean;
-  result!: string;
-  rejectionReason?: string;
-}
-
 export class PostReturnRequestDto {
   trackingCode!: string;
   reverseCode!: string;

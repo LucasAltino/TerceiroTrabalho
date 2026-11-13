@@ -3,14 +3,13 @@ import {
   ReturnRequestResponse,
   UpdateReturnRequestDto,
 } from '../dto/return-request.dto';
-import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
+import {
+  TRANSITION_RULES,
+  TransitionPayload,
+} from '../../domain/transition/return-transition-rules';
 
-export type ReturnAction =
-  | keyof typeof TRANSITION_RULES
-  | 'create'
-  | 'list'
-  | 'read'
-  | 'update';
+export type TransitionAction = keyof typeof TRANSITION_RULES;
+export type ReturnAction = TransitionAction | 'create' | 'list' | 'read' | 'update';
 
 export interface CreateReturnRequestUseCase {
   criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse>;
@@ -31,8 +30,8 @@ export interface UpdateReturnRequestUseCase {
 export interface TransitionReturnRequestUseCase {
   transicionar(
     id: string,
-    action: ReturnAction,
-    payload: unknown,
+    action: TransitionAction,
+    payload: TransitionPayload,
     actorId: string,
   ): Promise<ReturnRequestResponse>;
 }

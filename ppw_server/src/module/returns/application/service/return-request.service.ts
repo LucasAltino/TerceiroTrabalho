@@ -1,11 +1,11 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ReturnRequestEntity, ReturnTypeValue } from '../../domain/entity/return-request.entity';
+import { ReturnRequestEntity, ReturnRequestRecord } from '../../domain/entity/return-request.entity';
 import { ReturnRequestRepository } from '../../domain/ports/return-request.repository';
 import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
-import { TransitionRule } from '../../domain/transition/transition-rule';
-import { ReturnAction } from '../use-case/return-request.usecases';
+import { TransitionPayload } from '../../domain/transition/return-transition-rules';
+import { TransitionAction } from '../use-case/return-request.usecases';
 import { PayloadValidationError } from '../../domain/errors';
 import {
   CreateReturnRequestDto,
@@ -32,7 +32,7 @@ export class ReturnRequestService
   constructor(@Inject('RETURN_REQUEST_REPOSITORY') private readonly repositorio: ReturnRequestRepository) {}
 
   async criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse> {
-    if (dto.type !== 'DEVOLUTION' && dto.type !== 'EXCHANGE') {
+    if (!dto || typeof dto !== 'object' || (dto.type !== 'DEVOLUTION' && dto.type !== 'EXCHANGE')) {
       throw new PayloadValidationError('Invalid return type');
     }
     if (
@@ -40,24 +40,38 @@ export class ReturnRequestService
       dto.items.length === 0 ||
       dto.items.some(
         (item) =>
+          !item ||
+          typeof item !== 'object' ||
           typeof item.orderItemId !== 'string' ||
+          item.orderItemId.trim().length === 0 ||
           !Number.isInteger(item.quantity) ||
           item.quantity <= 0,
       )
     ) {
       throw new PayloadValidationError('At least one valid return item is required');
     }
+    if (
+      !hasText(dto.orderId) ||
+      !hasText(dto.productId) ||
+      !hasText(dto.reason) ||
+      !hasText(dto.description) ||
+      (dto.trackingCode !== undefined &&
+        dto.trackingCode !== null &&
+        !hasText(dto.trackingCode))
+    ) {
+      throw new PayloadValidationError('orderId, productId, reason, and description are required');
+    }
     const dataAtual = new Date();
     const solicitacao = new ReturnRequestEntity({
       id: randomUUID(),
-      orderId: dto.orderId,
+      orderId: dto.orderId.trim(),
       customerId,
-      productId: dto.productId,
-      type: dto.type as ReturnTypeValue,
+      productId: dto.productId.trim(),
+      type: dto.type,
       reason: dto.reason.trim(),
       description: dto.description.trim(),
       status: ReturnStatus.from(ReturnStatusValue.REQUESTED),
-      trackingCode: dto.trackingCode ?? null,
+      trackingCode: dto.trackingCode?.trim() ?? null,
       inspectionResult: null,
       rejectionReason: null,
       adjustmentRequestedAt: null,
@@ -67,7 +81,11 @@ export class ReturnRequestService
       updatedAt: dataAtual,
       deletedAt: null,
     });
-    const created = await this.repositorio.create(solicitacao, dto.items);
+    const items = dto.items.map((item) => ({
+      orderItemId: item.orderItemId.trim(),
+      quantity: item.quantity,
+    }));
+    const created = await this.repositorio.create(solicitacao, items);
     return { ...this.paraResposta(created.request), reverseCode: created.reverseCode };
   }
 
@@ -82,7 +100,18 @@ export class ReturnRequestService
   }
 
   async atualizar(id: string, dto: UpdateReturnRequestDto): Promise<ReturnRequestResponse> {
+    if (!dto || typeof dto !== 'object') {
+      throw new PayloadValidationError('Request payload must be an object');
+    }
     const solicitacaoAtual = await this.buscarObrigatoria(id);
+    for (const value of [dto.reason, dto.description]) {
+      if (value !== undefined && !hasText(value)) {
+        throw new PayloadValidationError('Updated reason and description must not be empty');
+      }
+    }
+    if (dto.trackingCode !== undefined && dto.trackingCode !== null && !hasText(dto.trackingCode)) {
+      throw new PayloadValidationError('trackingCode must not be empty');
+    }
     let entidade = this.paraEntidade(solicitacaoAtual);
 
     if (dto.reason !== undefined || dto.description !== undefined || dto.trackingCode !== undefined) {
@@ -99,14 +128,11 @@ export class ReturnRequestService
 
   async transicionar(
     id: string,
-    acao: ReturnAction,
-    payload: unknown,
+    acao: TransitionAction,
+    payload: TransitionPayload,
     actorId: string,
   ): Promise<ReturnRequestResponse> {
     const entidade = this.paraEntidade(await this.buscarObrigatoria(id));
-    if (acao === 'create' || acao === 'list' || acao === 'read' || acao === 'update') {
-      throw new Error(`Unsupported return transition action: ${acao}`);
-    }
     return this.transicionarEntidade(entidade, acao, TRANSITION_RULES[acao], payload, actorId);
   }
 
@@ -116,33 +142,41 @@ export class ReturnRequestService
     return solicitacao;
   }
 
-  private paraEntidade(solicitacao: any): ReturnRequestEntity {
+  private paraEntidade(solicitacao: ReturnRequestRecord): ReturnRequestEntity {
     return new ReturnRequestEntity({ ...solicitacao, status: ReturnStatus.from(solicitacao.status) });
   }
 
   private async transicionarEntidade(
     entidade: ReturnRequestEntity,
-    acao: keyof typeof TRANSITION_RULES,
-    regra: TransitionRule<any>,
-    payload: unknown,
+    acao: TransitionAction,
+    regra: (typeof TRANSITION_RULES)[TransitionAction],
+    payload: TransitionPayload,
     actorId: string,
   ): Promise<ReturnRequestResponse> {
     const transicionada = entidade.transition(regra, payload);
-    const auditFields: Partial<Record<keyof typeof TRANSITION_RULES, string>> = {
-      reject: 'rejectionReason',
-      requestAdjustment: 'adjustmentReason',
-      cancel: 'justification',
+    const auditJustification: Partial<
+      Record<TransitionAction, (payload: TransitionPayload) => string | undefined>
+    > = {
+      reject: (value) =>
+        'rejectionReason' in value && typeof value.rejectionReason === 'string'
+          ? value.rejectionReason
+          : undefined,
+      requestAdjustment: (value) =>
+        'adjustmentReason' in value && typeof value.adjustmentReason === 'string'
+          ? value.adjustmentReason
+          : undefined,
+      cancel: (value) =>
+        'justification' in value && typeof value.justification === 'string'
+          ? value.justification
+          : undefined,
     };
-    const field = auditFields[acao];
-    const payloadObject =
-      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
-    const suppliedJustification = field ? payloadObject[field] : undefined;
+    const suppliedJustification = auditJustification[acao]?.(payload);
     const justification =
       typeof suppliedJustification === 'string'
         ? suppliedJustification.trim()
         : `Action: ${regra.name}`;
     const reverseCode =
-      acao === 'post' && isRecord(payload) && typeof payload.reverseCode === 'string'
+      acao === 'post' && 'reverseCode' in payload && typeof payload.reverseCode === 'string'
         ? payload.reverseCode.trim()
         : undefined;
     const atualizada = await this.repositorio.updateWithVersion(
@@ -157,15 +191,28 @@ export class ReturnRequestService
     return this.paraResposta(atualizada);
   }
 
-  private paraResposta(solicitacao: any): ReturnRequestResponse {
+  private paraResposta(solicitacao: ReturnRequestRecord): ReturnRequestResponse {
     return {
-      ...solicitacao,
-      type: solicitacao.type as ReturnTypeValue,
-      status: solicitacao.status instanceof ReturnStatus ? solicitacao.status.getValue() : solicitacao.status,
+      id: solicitacao.id,
+      orderId: solicitacao.orderId,
+      customerId: solicitacao.customerId,
+      productId: solicitacao.productId,
+      type: solicitacao.type,
+      reason: solicitacao.reason,
+      description: solicitacao.description,
+      status: solicitacao.status,
+      trackingCode: solicitacao.trackingCode ?? null,
+      inspectionResult: solicitacao.inspectionResult ?? null,
+      rejectionReason: solicitacao.rejectionReason ?? null,
+      adjustmentRequestedAt: solicitacao.adjustmentRequestedAt ?? null,
+      adjustmentReason: solicitacao.adjustmentReason ?? null,
+      version: solicitacao.version,
+      createdAt: solicitacao.createdAt,
+      updatedAt: solicitacao.updatedAt,
     };
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function hasText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }

@@ -5,8 +5,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PermissionDeniedError } from '../domain/errors';
 import { TRANSITION_RULES } from '../domain/transition/return-transition-rules';
 import { AuthenticatedRequest, AuthenticatedUser } from '../../auth/auth.types';
+import { ReturnAction } from '../application/use-case/return-request.usecases';
 
-export type ReturnAction = keyof typeof TRANSITION_RULES | 'create' | 'list' | 'read' | 'update';
 const RETURN_ACTION_METADATA = 'return_action';
 
 export const RETURN_ACTION_PERMISSIONS: Record<Role, readonly ReturnAction[]> = {
