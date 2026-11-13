@@ -8,3 +8,4 @@ export abstract class DomainError extends Error {
 export class InvalidTransitionError extends DomainError {}
 export class PayloadValidationError extends DomainError {}
 export class VersionConflictError extends DomainError {}
+export class PermissionDeniedError extends DomainError {}

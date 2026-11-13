@@ -14,7 +14,6 @@ export class UpdateReturnRequestDto {
   reason?: string;
   description?: string;
   trackingCode?: string | null;
-  status?: string;
 }
 
 export class UpdateReturnStatusDto {
@@ -39,6 +38,9 @@ export type ReturnRequestResponse = {
   trackingCode: string | null;
   inspectionResult: string | null;
   rejectionReason: string | null;
+  adjustmentRequestedAt: Date | null;
+  adjustmentReason: string | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 };

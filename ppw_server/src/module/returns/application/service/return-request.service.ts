@@ -4,6 +4,12 @@ import { ReturnRequestEntity, ReturnTypeValue } from '../../domain/entity/return
 import { ReturnRequestRepository } from '../../domain/ports/return-request.repository';
 import { ReturnStatus, ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
 import {
+  ApproveRule,
+  RejectRule,
+  StartInspectionRule,
+  TRANSITION_RULES,
+} from '../../domain/transition/return-transition-rules';
+import {
   CreateReturnRequestDto,
   InspectReturnRequestDto,
   ReturnRequestResponse,
@@ -50,6 +56,9 @@ export class ReturnRequestService
       trackingCode: dto.trackingCode ?? null,
       inspectionResult: null,
       rejectionReason: null,
+      adjustmentRequestedAt: null,
+      adjustmentReason: null,
+      version: 0,
       createdAt: dataAtual,
       updatedAt: dataAtual,
       deletedAt: null,
@@ -79,31 +88,32 @@ export class ReturnRequestService
       });
     }
 
-    if (dto.status) {
-      entidade = entidade.mudarStatusPara(dto.status as ReturnStatusValue);
-    }
-
     const atualizada = await this.repositorio.update(entidade);
     return this.paraResposta(atualizada);
   }
 
   async atualizarStatus(id: string, dto: UpdateReturnStatusDto): Promise<ReturnRequestResponse> {
     const solicitacaoAtual = await this.buscarObrigatoria(id);
-    const solicitacaoAtualizada = this.paraEntidade(solicitacaoAtual).mudarStatusPara(dto.status as ReturnStatusValue);
+    const entidade = this.paraEntidade(solicitacaoAtual);
+    const regra = Object.values(TRANSITION_RULES).find((candidate) => candidate.to === dto.status);
+    if (!regra) throw new Error(`Unsupported return status transition: ${dto.status}`);
+    const payload = {
+      trackingCode: entidade.props.trackingCode ?? '',
+      inspectionResult: entidade.props.inspectionResult ?? '',
+      rejectionReason: entidade.props.rejectionReason ?? '',
+      adjustmentReason: entidade.props.adjustmentReason ?? '',
+      justification: '',
+    };
+    const solicitacaoAtualizada = entidade.transition(regra, payload);
     return this.paraResposta(await this.repositorio.update(solicitacaoAtualizada));
   }
 
   async registrarInspecao(id: string, dto: InspectReturnRequestDto): Promise<ReturnRequestResponse> {
     const solicitacaoAtual = await this.buscarObrigatoria(id);
-    const emInspecao = this.paraEntidade(solicitacaoAtual).mudarStatusPara(ReturnStatusValue.INSPECTING);
-    const statusFinal = dto.approved ? ReturnStatusValue.APPROVED : ReturnStatusValue.REJECTED;
-    const solicitacaoInspecionada = new ReturnRequestEntity({
-      ...emInspecao.props,
-      status: ReturnStatus.from(statusFinal),
-      inspectionResult: dto.result.trim(),
-      rejectionReason: dto.approved ? null : dto.rejectionReason?.trim() || dto.result.trim(),
-      updatedAt: new Date(),
-    });
+    const emInspecao = this.paraEntidade(solicitacaoAtual).transition(StartInspectionRule, {});
+    const solicitacaoInspecionada = dto.approved
+      ? emInspecao.transition(ApproveRule, { inspectionResult: dto.result })
+      : emInspecao.transition(RejectRule, { rejectionReason: dto.rejectionReason ?? dto.result });
     return this.paraResposta(await this.repositorio.update(solicitacaoInspecionada));
   }
 
