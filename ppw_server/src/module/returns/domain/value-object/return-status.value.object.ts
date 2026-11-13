@@ -6,6 +6,31 @@ export enum ReturnStatusValue {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   COMPLETED = 'COMPLETED',
+  ADJUSTMENT_REQUESTED = 'ADJUSTMENT_REQUESTED',
+}
+
+export class ReturnStatus {
+  private constructor(private readonly valor: ReturnStatusValue) {}
+
+  static from(value: string): ReturnStatus {
+    if (!Object.values(ReturnStatusValue).includes(value as ReturnStatusValue)) {
+      throw new Error(`Invalid return status: ${value}`);
+    }
+    return new ReturnStatus(value as ReturnStatusValue);
+  }
+
+  getValue(): ReturnStatusValue {
+    return this.valor;
+  }
+}
+ {
+  REQUESTED = 'REQUESTED',
+  POSTED = 'POSTED',
+  RECEIVED = 'RECEIVED',
+  INSPECTING = 'INSPECTING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  COMPLETED = 'COMPLETED',
 }
 
 export class ReturnStatus {
