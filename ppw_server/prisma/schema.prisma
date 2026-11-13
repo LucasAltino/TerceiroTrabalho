@@ -49,23 +49,41 @@ enum ReturnStatus {
   CANCELLED
 }
 
+enum Role {
+  CUSTOMER
+  INSPECTOR
+  FINANCE
+  ADMIN
+}
+
+model User {
+  id           String          @id @default(uuid())
+  email        String          @unique
+  passwordHash String          @map("password_hash")
+  role         Role
+  returns      ReturnRequest[] @relation("ReturnCustomer")
+
+  @@map("users")
+}
+
 model ReturnRequest {
-  id                   String       @id
-  orderId              String       @map("order_id")
-  customerId           String       @map("customer_id")
-  productId            String       @map("product_id")
-  type                 ReturnType
-  reason               String
-  description          String
-  status               ReturnStatus @default(REQUESTED)
-  trackingCode         String?      @map("tracking_code")
-  inspectionResult     String?      @map("inspection_result")
-  rejectionReason      String?      @map("rejection_reason")
-  adjustmentRequestedAt DateTime?   @map("adjustment_requested_at")
-  adjustmentReason     String?      @map("adjustment_reason")
-  version              Int          @default(0)
-  createdAt            DateTime     @default(now()) @map("created_at")
-  updatedAt            DateTime     @updatedAt @map("updated_at")
+  id                    String       @id
+  orderId               String       @map("order_id")
+  customerId            String       @map("customer_id")
+  productId             String       @map("product_id")
+  type                  ReturnType
+  reason                String
+  description           String
+  status                ReturnStatus @default(REQUESTED)
+  trackingCode          String?      @map("tracking_code")
+  inspectionResult      String?      @map("inspection_result")
+  rejectionReason       String?      @map("rejection_reason")
+  adjustmentRequestedAt DateTime?    @map("adjustment_requested_at")
+  adjustmentReason      String?      @map("adjustment_reason")
+  version               Int          @default(0)
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+  customer              User         @relation("ReturnCustomer", fields: [customerId], references: [id], onDelete: Restrict)
 
   @@map("return_requests")
 }

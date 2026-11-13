@@ -2,7 +2,6 @@ import { ReturnTypeValue } from '../../domain/entity/return-request.entity';
 
 export class CreateReturnRequestDto {
   orderId!: string;
-  customerId!: string;
   productId!: string;
   type!: ReturnTypeValue;
   reason!: string;

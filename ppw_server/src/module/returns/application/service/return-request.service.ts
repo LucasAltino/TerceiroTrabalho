@@ -29,7 +29,7 @@ export class ReturnRequestService
 {
   constructor(@Inject('RETURN_REQUEST_REPOSITORY') private readonly repositorio: ReturnRequestRepository) {}
 
-  async criar(dto: CreateReturnRequestDto): Promise<ReturnRequestResponse> {
+  async criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse> {
     if (dto.type !== 'DEVOLUTION' && dto.type !== 'EXCHANGE') {
       throw new Error('Invalid return type');
     }
@@ -37,7 +37,7 @@ export class ReturnRequestService
     const solicitacao = new ReturnRequestEntity({
       id: randomUUID(),
       orderId: dto.orderId,
-      customerId: dto.customerId,
+      customerId,
       productId: dto.productId,
       type: dto.type as ReturnTypeValue,
       reason: dto.reason.trim(),
@@ -61,8 +61,8 @@ export class ReturnRequestService
     return this.paraResposta(solicitacao);
   }
 
-  async listarTodos(): Promise<ReturnRequestResponse[]> {
-    const solicitacoes = await this.repositorio.findAll();
+  async listarTodos(customerId?: string): Promise<ReturnRequestResponse[]> {
+    const solicitacoes = await this.repositorio.findAll(customerId);
     return solicitacoes.map((s) => this.paraResposta(s));
   }
 

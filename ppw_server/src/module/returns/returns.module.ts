@@ -2,10 +2,14 @@ import { Module } from '@nestjs/common';
 import { ReturnRequestService } from './application/service/return-request.service';
 import { ReturnRequestPrismaRepository } from './infrastructure/adapters/return-request.prisma.repository';
 import { ReturnRequestController } from './presentation/return-request.controller';
+import { AuthModule } from '../auth/auth.module';
+import { ReturnPermissionsGuard } from './presentation/return-permissions.guard';
 
 @Module({
+  imports: [AuthModule],
   controllers: [ReturnRequestController],
   providers: [
+    ReturnPermissionsGuard,
     ReturnRequestPrismaRepository,
     { provide: 'RETURN_REQUEST_REPOSITORY', useExisting: ReturnRequestPrismaRepository },
     ReturnRequestService,

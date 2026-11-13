@@ -6,7 +6,7 @@ import {
 import { TRANSITION_RULES } from '../../domain/transition/return-transition-rules';
 
 export interface CreateReturnRequestUseCase {
-  criar(dto: CreateReturnRequestDto): Promise<ReturnRequestResponse>;
+  criar(dto: CreateReturnRequestDto, customerId: string): Promise<ReturnRequestResponse>;
 }
 
 export interface GetReturnRequestUseCase {
@@ -14,7 +14,7 @@ export interface GetReturnRequestUseCase {
 }
 
 export interface ListReturnRequestsUseCase {
-  listarTodos(): Promise<ReturnRequestResponse[]>;
+  listarTodos(customerId?: string): Promise<ReturnRequestResponse[]>;
 }
 
 export interface UpdateReturnRequestUseCase {

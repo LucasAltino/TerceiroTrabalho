@@ -5,9 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ReturnsModule } from '../module/returns/returns.module';
 import { LeadsModule } from '../module/leads/leads.module';
 import { DomainExceptionFilter } from '../shared/presentation/domain-exception.filter';
+import { AuthModule } from '../module/auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, TicketsModule, ReturnsModule, LeadsModule],
+  imports: [PrismaModule, AuthModule, TicketsModule, ReturnsModule, LeadsModule],
   providers: [{ provide: APP_FILTER, useClass: DomainExceptionFilter }],
 })
 export class AppModule {}

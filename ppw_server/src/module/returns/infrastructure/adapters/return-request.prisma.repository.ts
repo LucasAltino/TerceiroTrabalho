@@ -21,8 +21,9 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
     return this.prisma.returnRequest.findUnique({ where: { id } });
   }
 
-  async findAll(): Promise<ReturnRequest[]> {
+  async findAll(customerId?: string): Promise<ReturnRequest[]> {
     return this.prisma.returnRequest.findMany({
+      where: customerId ? { customerId } : undefined,
       orderBy: { createdAt: 'desc' },
     });
   }
