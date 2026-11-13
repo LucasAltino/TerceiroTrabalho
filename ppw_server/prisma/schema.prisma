@@ -45,6 +45,14 @@ enum ReturnStatus {
   APPROVED
   REJECTED
   COMPLETED
+  ADJUSTMENT_REQUESTED
+  REQUESTED
+  POSTED
+  RECEIVED
+  INSPECTING
+  APPROVED
+  REJECTED
+  COMPLETED
 }
 
 model ReturnRequest {
@@ -58,6 +66,11 @@ model ReturnRequest {
   status               ReturnStatus @default(REQUESTED)
   trackingCode         String?      @map("tracking_code")
   inspectionResult     String?      @map("inspection_result")
+  rejectionReason      String?      @map("rejection_reason")
+  adjustmentRequestedAt DateTime?   @map("adjustment_requested_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+  version              Int          @default(0)
   rejectionReason      String?      @map("rejection_reason")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
