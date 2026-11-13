@@ -1,119 +1,203 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Devoluções E-commerce
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend para abertura e acompanhamento de devoluções e trocas, com transições controladas, autorização por papel, histórico de auditoria e cálculo de estorno proporcional.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tecnologias
 
-## Description
+- NestJS e TypeScript
+- PostgreSQL e Prisma
+- bcryptjs para hashes de senha
+- JWT HS256 para autenticação
+- Jest para testes unitários e de integração
+- Docker Compose para PostgreSQL local
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Arquitetura
 
-## Project setup
+O módulo `returns` separa responsabilidades em quatro camadas:
 
-```bash
-$ npm install
+- `domain`: entidade, estados, regras de transição, erros e estratégia pura de cálculo. Não depende de NestJS ou Prisma.
+- `application`: serviços, DTOs e casos de uso.
+- `infrastructure`: persistência Prisma e transações PostgreSQL.
+- `presentation`: rotas HTTP, autenticação e autorização.
+
+As transições são registradas em `return-transition-rules.ts`. O repositório aplica controle otimista por versão e grava a alteração, os efeitos financeiros e o histórico na mesma transação quando necessário.
+
+## Modelo de dados (DER)
+
+```mermaid
+erDiagram
+    USERS {
+        string id PK
+        string email UK
+        string password_hash
+        enum role
+    }
+    ORDERS {
+        string id PK
+        decimal items_total
+        decimal coupon_discount
+        decimal shipping_paid
+        decimal amount_paid
+        decimal amount_refunded
+    }
+    ORDER_ITEMS {
+        string id PK
+        string order_id FK
+        string product_id
+        decimal unit_price
+        int quantity
+    }
+    RETURN_REQUESTS {
+        string id PK
+        string order_id FK
+        string customer_id FK
+        string product_id
+        enum type
+        enum status
+        int version
+        datetime adjustment_requested_at
+        string adjustment_reason
+    }
+    RETURN_ITEMS {
+        string return_request_id PK, FK
+        string order_item_id PK, FK
+        int quantity
+    }
+    REFUNDS {
+        string id PK
+        string return_request_id FK, UK
+        decimal valor
+        enum status
+    }
+    REVERSE_CODES {
+        string id PK
+        string code UK
+        string return_request_id FK, UK
+        string order_id FK
+        datetime expires_at
+        datetime used_at
+    }
+    RETURN_STATUS_HISTORY {
+        string id_registro PK
+        string return_request_id FK
+        enum estado_anterior
+        enum novo_estado
+        string autor_id FK
+        string justificativa
+        datetime timestamp
+    }
+
+    USERS ||--o{ RETURN_REQUESTS : owns
+    ORDERS ||--|{ ORDER_ITEMS : contains
+    ORDERS ||--o{ RETURN_REQUESTS : has
+    RETURN_REQUESTS ||--|{ RETURN_ITEMS : contains
+    ORDER_ITEMS ||--o{ RETURN_ITEMS : selected
+    RETURN_REQUESTS ||--o| REFUNDS : generates
+    RETURN_REQUESTS ||--o| REVERSE_CODES : receives
+    ORDERS ||--o{ REVERSE_CODES : identifies
+    RETURN_REQUESTS ||--o{ RETURN_STATUS_HISTORY : records
+    USERS ||--o{ RETURN_STATUS_HISTORY : authors
 ```
 
-## Compile and run the project
+## Máquina de estados
 
-```bash
-# development
-$ npm run start
+```mermaid
+stateDiagram-v2
+    [*] --> REQUESTED
+    REQUESTED --> POSTED: post (código reverso válido)
+    POSTED --> RECEIVED: receive
+    RECEIVED --> INSPECTING: startInspection
+    ADJUSTMENT_REQUESTED --> INSPECTING: startInspection
+    INSPECTING --> APPROVED: approve (inspectionResult)
+    INSPECTING --> REJECTED: reject (rejectionReason)
+    INSPECTING --> ADJUSTMENT_REQUESTED: requestAdjustment (adjustmentReason)
+    APPROVED --> COMPLETED: complete
 
-# watch mode
-$ npm run start:dev
+    REQUESTED --> CANCELLED: cancel
+    POSTED --> CANCELLED: cancel
+    RECEIVED --> CANCELLED: cancel
+    INSPECTING --> CANCELLED: cancel
+    ADJUSTMENT_REQUESTED --> CANCELLED: cancel
+    APPROVED --> CANCELLED: cancel (reverte refund pendente)
 
-# production mode
-$ npm run start:prod
+    REJECTED --> [*]
+    COMPLETED --> [*]
+    CANCELLED --> [*]
 ```
 
-## Run tests
+## Regras principais
 
-```bash
-# unit tests
-$ npm run test
+- O estado só muda pelas ações explícitas da FSM; atualização concorrente exige a versão e o estado de origem esperados.
+- `REJECTED` e `COMPLETED` são terminais. Cancelamento só é permitido até `APPROVED`.
+- A matriz RBAC está declarada como dados em `RETURN_ACTION_PERMISSIONS`. Clientes só criam e operam as próprias devoluções.
+- Códigos reversos são aleatórios, únicos, vinculados à devolução e ao pedido, e expiram em sete dias por padrão. O prazo pode ser configurado por `RETURN_CODE_TTL_DAYS`.
+- `post` valida e consome o código na mesma transação da mudança de estado e auditoria. Código inexistente ou expirado retorna 422; código usado/conflito retorna 409.
+- Auditoria é obrigatória em cada transição. `reject`, `requestAdjustment` e `cancel` registram a justificativa informada; as outras ações usam uma justificativa padrão.
+- O desconto do cupom é distribuído proporcionalmente por item em centavos, com resto pelo método do maior resto. Trocas não geram estorno. O frete pago só entra no estorno quando todas as quantidades do pedido tiverem sido devolvidas. O total estornado nunca excede o valor pago.
+- Aprovação de devolução cria refund `PENDING`; conclusão muda para `PAID`. Cancelamento de uma devolução aprovada muda refund pendente para `REVERSED` e libera o valor reservado.
 
-# e2e tests
-$ npm run test:e2e
+## Execução local
 
-# test coverage
-$ npm run test:cov
+Pré-requisitos: Node.js, npm e PostgreSQL local ou Docker Desktop. O banco de desenvolvimento é PostgreSQL, banco `devolucoes`, na porta `5432`. O projeto lê o `.env` existente na raiz; não versione esse arquivo.
+
+### 1. Subir PostgreSQL (opcional)
+
+Se já houver PostgreSQL local disponível, pule o Docker. Caso use Compose, ajuste `POSTGRES_USER` e `POSTGRES_PASSWORD` no ambiente para corresponderem ao banco configurado no `.env`; o serviço cria o banco `devolucoes`.
+
+```powershell
+docker compose up -d postgres
 ```
 
-## Prisma
+Para parar o container sem apagar os dados:
 
-Execute os comandos abaixo a partir da pasta `ppw_server`:
-
-```bash
-# Abrir o Prisma Studio para visualizar e editar os dados
-npx prisma studio
-
-# Formatar o schema Prisma
-npx prisma format
-
-# Regenerar o Prisma Client após alterar o schema
-npx prisma generate
-
-# Criar e aplicar uma migration para alterações no schema
-npx prisma migrate dev --name descreva_o_que_mudou
-
-# Exemplo: aplicar uma alteração para permitir valores nulos em um campo
-npx prisma migrate dev --name make_field_nullable
+```powershell
+docker compose stop postgres
 ```
 
-## Deployment
+Não use `docker compose down -v` se precisar preservar o banco.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### 2. Instalar dependências e preparar o banco
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Na raiz do repositório:
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```powershell
+npm --prefix ppw_server install
+npx --prefix ppw_server prisma migrate dev --schema ppw_server/prisma/schema.prisma
+npx --prefix ppw_server prisma db seed --schema ppw_server/prisma/schema.prisma
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Defina `JWT_SECRET` no ambiente antes de iniciar a API. Exemplo para a sessão atual do PowerShell:
 
-## Resources
+```powershell
+$env:JWT_SECRET = ([guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N'))
+$env:RETURN_CODE_TTL_DAYS = '7'
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### 3. Executar API e testes
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```powershell
+npm --prefix ppw_server run start:dev
+npm --prefix ppw_server run build
+npm --prefix ppw_server test -- --runInBand
+```
 
-## Support
+Os testes PostgreSQL ficam desativados por padrão. Com o banco local e as migrations aplicadas, podem ser habilitados assim:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```powershell
+$env:RUN_POSTGRES_INTEGRATION_TESTS = '1'
+npm --prefix ppw_server test -- --runInBand
+Remove-Item Env:RUN_POSTGRES_INTEGRATION_TESTS
+```
 
-## Stay in touch
+### Usuários locais de demonstração
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+O seed cria/atualiza estes usuários de desenvolvimento:
 
-## License
+| Papel | E-mail | Senha local |
+|---|---|---|
+| CUSTOMER | `customer@returns.local` | `Customer123!` |
+| INSPECTOR | `inspector@returns.local` | `Inspector123!` |
+| FINANCE | `finance@returns.local` | `Finance123!` |
+| ADMIN | `admin@returns.local` | `Admin123!` |
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Use-os somente em ambiente local. A autenticação é `POST /auth/login`; as ações de devolução exigem o token Bearer retornado.
