@@ -1,11 +1,10 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   RotateCcw,
   Plus,
   Search,
-  Trash2,
   Edit3,
   CheckCircle2,
   XCircle,
@@ -15,116 +14,131 @@ import {
   FileCheck,
   RefreshCw,
   AlertTriangle,
-  ArrowRight,
   ShieldAlert,
-} from 'lucide-react';
+  LogOut,
+} from "lucide-react";
 import {
+  authApi,
   returnsApi,
   ReturnRequest,
   CreateReturnPayload,
   UpdateReturnPayload,
-  InspectReturnPayload,
   ReturnStatusValue,
-} from '@/lib/api';
-import { Modal } from '@/components/ui/modal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+} from "@/lib/api";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
-const STATUS_CONFIG: Record<ReturnStatusValue, { label: string; bg: string; color: string; icon: any }> = {
+const STATUS_CONFIG: Record<
+  ReturnStatusValue,
+  { label: string; bg: string; color: string; icon: any }
+> = {
   REQUESTED: {
-    label: 'Solicitado',
-    bg: 'bg-amber-500/10 border-amber-500/20 text-amber-600',
-    color: 'text-amber-600',
+    label: "Solicitado",
+    bg: "bg-amber-500/10 border-amber-500/20 text-amber-600",
+    color: "text-amber-600",
     icon: Clock,
   },
   POSTED: {
-    label: 'Postado',
-    bg: 'bg-sky-500/10 border-sky-500/20 text-sky-600',
-    color: 'text-sky-600',
+    label: "Postado",
+    bg: "bg-sky-500/10 border-sky-500/20 text-sky-600",
+    color: "text-sky-600",
     icon: Truck,
   },
   RECEIVED: {
-    label: 'Recebido',
-    bg: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600',
-    color: 'text-indigo-600',
+    label: "Recebido",
+    bg: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600",
+    color: "text-indigo-600",
     icon: Box,
   },
   INSPECTING: {
-    label: 'Em Inspeção',
-    bg: 'bg-purple-500/10 border-purple-500/20 text-purple-600',
-    color: 'text-purple-600',
+    label: "Em Inspeção",
+    bg: "bg-purple-500/10 border-purple-500/20 text-purple-600",
+    color: "text-purple-600",
     icon: FileCheck,
   },
+  ADJUSTMENT_REQUESTED: {
+    label: "Ajuste solicitado",
+    bg: "bg-orange-500/10 border-orange-500/20 text-orange-600",
+    color: "text-orange-600",
+    icon: AlertTriangle,
+  },
   APPROVED: {
-    label: 'Aprovado',
-    bg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600',
-    color: 'text-emerald-600',
+    label: "Aprovado",
+    bg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-600",
+    color: "text-emerald-600",
     icon: CheckCircle2,
   },
   REJECTED: {
-    label: 'Rejeitado',
-    bg: 'bg-rose-500/10 border-rose-500/20 text-rose-600',
-    color: 'text-rose-600',
+    label: "Rejeitado",
+    bg: "bg-rose-500/10 border-rose-500/20 text-rose-600",
+    color: "text-rose-600",
     icon: XCircle,
   },
   COMPLETED: {
-    label: 'Concluído',
-    bg: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
-    color: 'text-blue-600',
+    label: "Concluído",
+    bg: "bg-blue-500/10 border-blue-500/20 text-blue-600",
+    color: "text-blue-600",
     icon: CheckCircle2,
   },
-};
-
-const NEXT_STATUS_MAP: Record<ReturnStatusValue, ReturnStatusValue | null> = {
-  REQUESTED: 'POSTED',
-  POSTED: 'RECEIVED',
-  RECEIVED: 'INSPECTING',
-  INSPECTING: null, // Resolvido via Inspeção
-  APPROVED: 'COMPLETED',
-  REJECTED: null,
-  COMPLETED: null,
+  CANCELLED: {
+    label: "Cancelado",
+    bg: "bg-muted text-muted-foreground",
+    color: "text-muted-foreground",
+    icon: XCircle,
+  },
 };
 
 export function ReturnManagement() {
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   // Filters & Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'DEVOLUTION' | 'EXCHANGE'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | ReturnStatusValue>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<
+    "all" | "DEVOLUTION" | "EXCHANGE"
+  >("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReturnStatusValue>(
+    "all",
+  );
 
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingReturn, setEditingReturn] = useState<ReturnRequest | null>(null);
-  const [inspectingReturn, setInspectingReturn] = useState<ReturnRequest | null>(null);
-  const [deletingReturn, setDeletingReturn] = useState<ReturnRequest | null>(null);
+  const [editingReturn, setEditingReturn] = useState<ReturnRequest | null>(
+    null,
+  );
+  const [inspectingReturn, setInspectingReturn] =
+    useState<ReturnRequest | null>(null);
+  const [deletingReturn, setDeletingReturn] = useState<ReturnRequest | null>(
+    null,
+  );
 
   // Form state for Create
   const [createForm, setCreateForm] = useState<CreateReturnPayload>({
-    orderId: '',
-    customerId: '',
-    productId: '',
-    type: 'DEVOLUTION',
-    reason: 'Defeito de fabricação',
-    description: '',
-    trackingCode: '',
+    orderId: "",
+    productId: "",
+    type: "DEVOLUTION",
+    reason: "Defeito de fabricação",
+    description: "",
+    items: [{ orderItemId: "", quantity: 1 }],
   });
 
   // Form state for Edit
   const [editForm, setEditForm] = useState<UpdateReturnPayload>({
-    reason: '',
-    description: '',
-    trackingCode: '',
+    reason: "",
+    description: "",
+    trackingCode: "",
   });
 
-  // Form state for Inspection
-  const [inspectForm, setInspectForm] = useState<InspectReturnPayload>({
+  const [inspectForm, setInspectForm] = useState({
     approved: true,
-    result: 'Produto inspecionado e conforme para troca/estorno.',
-    rejectionReason: '',
+    result: "Produto inspecionado e conforme para troca/estorno.",
+    rejectionReason: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -137,16 +151,41 @@ export function ReturnManagement() {
       const data = await returnsApi.list();
       setReturns(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error('Erro ao buscar devoluções:', err);
-      setError(err.message || 'Falha ao conectar com o servidor.');
+      console.error("Erro ao buscar devoluções:", err);
+      setError(err.message || "Falha ao conectar com o servidor.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchReturns();
+    const token = authApi.getToken();
+    setIsAuthenticated(Boolean(token));
+    if (token) void fetchReturns();
+    else setIsLoading(false);
   }, [fetchReturns]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await authApi.login(loginEmail.trim(), loginPassword);
+      setIsAuthenticated(true);
+      setLoginPassword("");
+      await fetchReturns();
+    } catch (err: any) {
+      setError(err.message || "Falha ao entrar.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    authApi.logout();
+    setIsAuthenticated(false);
+    setReturns([]);
+  };
 
   // Filtered returns
   const filteredReturns = useMemo(() => {
@@ -157,10 +196,12 @@ export function ReturnManagement() {
         r.productId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.reason.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.trackingCode && r.trackingCode.toLowerCase().includes(searchQuery.toLowerCase()));
+        (r.trackingCode &&
+          r.trackingCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      const matchesType = typeFilter === 'all' ? true : r.type === typeFilter;
-      const matchesStatus = statusFilter === 'all' ? true : r.status === statusFilter;
+      const matchesType = typeFilter === "all" ? true : r.type === typeFilter;
+      const matchesStatus =
+        statusFilter === "all" ? true : r.status === statusFilter;
 
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -169,43 +210,66 @@ export function ReturnManagement() {
   // Statistics
   const stats = useMemo(() => {
     const total = returns.length;
-    const requested = returns.filter((r) => r.status === 'REQUESTED').length;
+    const requested = returns.filter((r) => r.status === "REQUESTED").length;
     const inProgress = returns.filter(
-      (r) => r.status === 'POSTED' || r.status === 'RECEIVED' || r.status === 'INSPECTING',
+      (r) =>
+        r.status === "POSTED" ||
+        r.status === "RECEIVED" ||
+        r.status === "INSPECTING" ||
+        r.status === "ADJUSTMENT_REQUESTED",
     ).length;
-    const approvedOrDone = returns.filter((r) => r.status === 'APPROVED' || r.status === 'COMPLETED').length;
-    const rejected = returns.filter((r) => r.status === 'REJECTED').length;
+    const approvedOrDone = returns.filter(
+      (r) => r.status === "APPROVED" || r.status === "COMPLETED",
+    ).length;
+    const rejected = returns.filter((r) => r.status === "REJECTED").length;
     return { total, requested, inProgress, approvedOrDone, rejected };
   }, [returns]);
 
   // Handle Create Submit
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.orderId.trim() || !createForm.customerId.trim() || !createForm.productId.trim()) {
-      alert('Preencha os campos obrigatórios (Pedido, Cliente e Produto).');
+    const requestedItem = createForm.items[0];
+    if (
+      !createForm.orderId.trim() ||
+      !createForm.productId.trim() ||
+      !requestedItem?.orderItemId.trim() ||
+      !Number.isInteger(requestedItem.quantity) ||
+      requestedItem.quantity < 1
+    ) {
+      alert(
+        "Informe o pedido, produto, item do pedido e uma quantidade válida.",
+      );
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await returnsApi.create({
+      const created = await returnsApi.create({
         ...createForm,
         orderId: createForm.orderId.trim(),
-        customerId: createForm.customerId.trim(),
         productId: createForm.productId.trim(),
         reason: createForm.reason.trim(),
         description: createForm.description.trim(),
-        trackingCode: createForm.trackingCode?.trim() || null,
+        items: [
+          {
+            orderItemId: requestedItem.orderItemId.trim(),
+            quantity: requestedItem.quantity,
+          },
+        ],
       });
+      if (created.reverseCode) {
+        alert(
+          `Solicitação criada. Código reverso (válido por 7 dias): ${created.reverseCode}`,
+        );
+      }
       setIsCreateOpen(false);
       setCreateForm({
-        orderId: '',
-        customerId: '',
-        productId: '',
-        type: 'DEVOLUTION',
-        reason: 'Defeito de fabricação',
-        description: '',
-        trackingCode: '',
+        orderId: "",
+        productId: "",
+        type: "DEVOLUTION",
+        reason: "Defeito de fabricação",
+        description: "",
+        items: [{ orderItemId: "", quantity: 1 }],
       });
       await fetchReturns();
     } catch (err: any) {
@@ -221,7 +285,7 @@ export function ReturnManagement() {
     setEditForm({
       reason: ret.reason,
       description: ret.description,
-      trackingCode: ret.trackingCode || '',
+      trackingCode: ret.trackingCode || "",
     });
   };
 
@@ -246,65 +310,150 @@ export function ReturnManagement() {
     }
   };
 
-  // Open Inspection Modal
   const handleOpenInspection = (ret: ReturnRequest) => {
     setInspectingReturn(ret);
     setInspectForm({
       approved: true,
-      result: ret.inspectionResult || 'Produto inspecionado e conforme para troca/estorno.',
-      rejectionReason: ret.rejectionReason || '',
+      result:
+        ret.inspectionResult ||
+        "Produto inspecionado e conforme para troca/estorno.",
+      rejectionReason: ret.rejectionReason || "",
     });
   };
 
-  // Handle Inspection Submit
   const handleInspectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inspectingReturn) return;
+    const result = inspectForm.result.trim();
+    const rejectionReason = inspectForm.rejectionReason.trim();
+    if (
+      (inspectForm.approved && !result) ||
+      (!inspectForm.approved && !rejectionReason)
+    ) {
+      alert("Informe o laudo para aprovação ou a justificativa para rejeição.");
+      return;
+    }
 
-    setIsSubmitting(true);
     try {
-      await returnsApi.inspect(inspectingReturn.id, {
-        approved: inspectForm.approved,
-        result: inspectForm.result.trim(),
-        rejectionReason: inspectForm.approved ? undefined : inspectForm.rejectionReason?.trim(),
-      });
+      if (inspectForm.approved) {
+        await returnsApi.approve(inspectingReturn.id, result);
+      } else {
+        await returnsApi.reject(inspectingReturn.id, rejectionReason);
+      }
       setInspectingReturn(null);
       await fetchReturns();
     } catch (err: any) {
       alert(`Erro ao registrar inspeção: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  // Advance Status in the flow
-  const handleAdvanceStatus = async (ret: ReturnRequest) => {
-    const nextStatus = NEXT_STATUS_MAP[ret.status];
-    if (!nextStatus) return;
-
+  const performTransition = async (
+    errorLabel: string,
+    transition: () => Promise<ReturnRequest>,
+  ) => {
     try {
-      await returnsApi.updateStatus(ret.id, nextStatus);
+      await transition();
       await fetchReturns();
     } catch (err: any) {
-      alert(`Erro ao avançar status: ${err.message}`);
+      alert(`Erro ao ${errorLabel}: ${err.message}`);
     }
   };
 
-  // Delete Confirm
-  const handleDeleteConfirm = async () => {
-    if (!deletingReturn) return;
+  const handlePost = (ret: ReturnRequest) => {
+    const trackingCode = window
+      .prompt("Informe o código de rastreamento:")
+      ?.trim();
+    if (!trackingCode) return;
+    const reverseCode = window
+      .prompt("Informe o código reverso recebido:")
+      ?.trim();
+    if (!reverseCode) return;
+    void performTransition("registrar postagem", () =>
+      returnsApi.post(ret.id, { trackingCode, reverseCode }),
+    );
+  };
 
+  const handleAdjustment = (ret: ReturnRequest) => {
+    const reason = window.prompt("Informe o ajuste solicitado:")?.trim();
+    if (reason)
+      void performTransition("solicitar ajuste", () =>
+        returnsApi.requestAdjustment(ret.id, reason),
+      );
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!deletingReturn) return;
+    const justification = window
+      .prompt("Informe a justificativa do cancelamento:")
+      ?.trim();
+    if (!justification) return;
     setIsSubmitting(true);
     try {
-      await returnsApi.delete(deletingReturn.id);
-      setDeletingReturn(null);
-      await fetchReturns();
-    } catch (err: any) {
-      alert(`Erro ao excluir: ${err.message}`);
+      await performTransition("cancelar devolução", async () => {
+        const result = await returnsApi.cancel(
+          deletingReturn.id,
+          justification,
+        );
+        setDeletingReturn(null);
+        return result;
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-md py-12">
+        <Card>
+          <CardContent className="p-6">
+            <h1 className="text-xl font-bold">Entrar em Devoluções</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use sua conta para acessar as solicitações.
+            </p>
+            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+            <form onSubmit={handleLogin} className="mt-5 space-y-4">
+              <div className="space-y-1.5">
+                <label
+                  className="text-xs font-semibold"
+                  htmlFor="returns-email"
+                >
+                  E-mail
+                </label>
+                <Input
+                  id="returns-email"
+                  type="email"
+                  autoComplete="username"
+                  required
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  className="text-xs font-semibold"
+                  htmlFor="returns-password"
+                >
+                  Senha
+                </label>
+                <Input
+                  id="returns-password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Entrando..." : "Entrar"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -315,16 +464,36 @@ export function ReturnManagement() {
             <RotateCcw className="h-4 w-4" />
             <span>Módulo de E-commerce & Logística Reversa</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground">Devoluções e Trocas de Mercadorias</h1>
+          <h1 className="text-3xl font-black tracking-tight text-foreground">
+            Devoluções e Trocas de Mercadorias
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Controle do fluxo de logística reversa, triagem, inspeção técnica e laudos de produtos.
+            Controle do fluxo de logística reversa, triagem, inspeção técnica e
+            laudos de produtos.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchReturns} disabled={isLoading} className="gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchReturns}
+            disabled={isLoading}
+            className="gap-1.5"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
+            />
             <span>Atualizar</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="gap-1.5"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Sair</span>
           </Button>
 
           <Button
@@ -342,8 +511,12 @@ export function ReturnManagement() {
         <Card className="border-border/60 shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium text-muted-foreground">Total</p>
-              <h3 className="text-xl font-bold mt-0.5 text-foreground">{stats.total}</h3>
+              <p className="text-[11px] font-medium text-muted-foreground">
+                Total
+              </p>
+              <h3 className="text-xl font-bold mt-0.5 text-foreground">
+                {stats.total}
+              </h3>
             </div>
             <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
               <RotateCcw className="h-4 w-4" />
@@ -354,8 +527,12 @@ export function ReturnManagement() {
         <Card className="border-border/60 shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">Solicitados</p>
-              <h3 className="text-xl font-bold mt-0.5 text-amber-600 dark:text-amber-400">{stats.requested}</h3>
+              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                Solicitados
+              </p>
+              <h3 className="text-xl font-bold mt-0.5 text-amber-600 dark:text-amber-400">
+                {stats.requested}
+              </h3>
             </div>
             <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
               <Clock className="h-4 w-4" />
@@ -366,8 +543,12 @@ export function ReturnManagement() {
         <Card className="border-border/60 shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium text-purple-600 dark:text-purple-400">Em Andamento</p>
-              <h3 className="text-xl font-bold mt-0.5 text-purple-600 dark:text-purple-400">{stats.inProgress}</h3>
+              <p className="text-[11px] font-medium text-purple-600 dark:text-purple-400">
+                Em Andamento
+              </p>
+              <h3 className="text-xl font-bold mt-0.5 text-purple-600 dark:text-purple-400">
+                {stats.inProgress}
+              </h3>
             </div>
             <div className="h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
               <Truck className="h-4 w-4" />
@@ -378,7 +559,9 @@ export function ReturnManagement() {
         <Card className="border-border/60 shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Aprovados/Concluídos</p>
+              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                Aprovados/Concluídos
+              </p>
               <h3 className="text-xl font-bold mt-0.5 text-emerald-600 dark:text-emerald-400">
                 {stats.approvedOrDone}
               </h3>
@@ -392,8 +575,12 @@ export function ReturnManagement() {
         <Card className="border-border/60 shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">Rejeitados</p>
-              <h3 className="text-xl font-bold mt-0.5 text-rose-600 dark:text-rose-400">{stats.rejected}</h3>
+              <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                Rejeitados
+              </p>
+              <h3 className="text-xl font-bold mt-0.5 text-rose-600 dark:text-rose-400">
+                {stats.rejected}
+              </h3>
             </div>
             <div className="h-9 w-9 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
               <XCircle className="h-4 w-4" />
@@ -417,33 +604,35 @@ export function ReturnManagement() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Tipo */}
           <div className="flex items-center rounded-lg border border-border p-1 bg-background/80 text-xs">
-            <span className="px-2 text-muted-foreground font-medium">Tipo:</span>
+            <span className="px-2 text-muted-foreground font-medium">
+              Tipo:
+            </span>
             <button
-              onClick={() => setTypeFilter('all')}
+              onClick={() => setTypeFilter("all")}
               className={`px-2.5 py-1 rounded-md transition-colors ${
-                typeFilter === 'all'
-                  ? 'bg-primary text-primary-foreground font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                typeFilter === "all"
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Todos
             </button>
             <button
-              onClick={() => setTypeFilter('DEVOLUTION')}
+              onClick={() => setTypeFilter("DEVOLUTION")}
               className={`px-2.5 py-1 rounded-md transition-colors ${
-                typeFilter === 'DEVOLUTION'
-                  ? 'bg-indigo-600 text-white font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                typeFilter === "DEVOLUTION"
+                  ? "bg-indigo-600 text-white font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Devolução
             </button>
             <button
-              onClick={() => setTypeFilter('EXCHANGE')}
+              onClick={() => setTypeFilter("EXCHANGE")}
               className={`px-2.5 py-1 rounded-md transition-colors ${
-                typeFilter === 'EXCHANGE'
-                  ? 'bg-cyan-600 text-white font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                typeFilter === "EXCHANGE"
+                  ? "bg-cyan-600 text-white font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Troca
@@ -452,7 +641,9 @@ export function ReturnManagement() {
 
           {/* Status */}
           <div className="flex items-center rounded-lg border border-border p-1 bg-background/80 text-xs">
-            <span className="px-2 text-muted-foreground font-medium">Status:</span>
+            <span className="px-2 text-muted-foreground font-medium">
+              Status:
+            </span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -463,9 +654,11 @@ export function ReturnManagement() {
               <option value="POSTED">Postado</option>
               <option value="RECEIVED">Recebido</option>
               <option value="INSPECTING">Em Inspeção</option>
+              <option value="ADJUSTMENT_REQUESTED">Ajuste solicitado</option>
               <option value="APPROVED">Aprovado</option>
               <option value="REJECTED">Rejeitado</option>
               <option value="COMPLETED">Concluído</option>
+              <option value="CANCELLED">Cancelado</option>
             </select>
           </div>
         </div>
@@ -484,7 +677,10 @@ export function ReturnManagement() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 rounded-xl border border-border/50 bg-muted/40 animate-pulse" />
+            <div
+              key={i}
+              className="h-32 rounded-xl border border-border/50 bg-muted/40 animate-pulse"
+            />
           ))}
         </div>
       ) : filteredReturns.length === 0 ? (
@@ -492,11 +688,13 @@ export function ReturnManagement() {
           <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary mx-auto flex items-center justify-center mb-4">
             <RotateCcw className="h-7 w-7" />
           </div>
-          <h3 className="text-lg font-bold text-foreground">Nenhuma solicitação encontrada</h3>
+          <h3 className="text-lg font-bold text-foreground">
+            Nenhuma solicitação encontrada
+          </h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            {searchQuery || typeFilter !== 'all' || statusFilter !== 'all'
-              ? 'Tente ajustar os filtros ou o termo de pesquisa.'
-              : 'Nenhuma devolução ou troca foi registrada ainda.'}
+            {searchQuery || typeFilter !== "all" || statusFilter !== "all"
+              ? "Tente ajustar os filtros ou o termo de pesquisa."
+              : "Nenhuma devolução ou troca foi registrada ainda."}
           </p>
           <Button onClick={() => setIsCreateOpen(true)} className="mt-5 gap-2">
             <Plus className="h-4 w-4" />
@@ -508,13 +706,12 @@ export function ReturnManagement() {
           {filteredReturns.map((ret) => {
             const statusInfo = STATUS_CONFIG[ret.status] || {
               label: ret.status,
-              bg: 'bg-muted text-muted-foreground',
-              color: 'text-muted-foreground',
+              bg: "bg-muted text-muted-foreground",
+              color: "text-muted-foreground",
               icon: Clock,
             };
             const StatusIcon = statusInfo.icon;
-            const nextStatus = NEXT_STATUS_MAP[ret.status];
-            const isDevolution = ret.type === 'DEVOLUTION';
+            const isDevolution = ret.type === "DEVOLUTION";
 
             return (
               <Card
@@ -529,11 +726,11 @@ export function ReturnManagement() {
                         <span
                           className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                             isDevolution
-                              ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
-                              : 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20'
+                              ? "bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
+                              : "bg-cyan-500/10 text-cyan-600 border-cyan-500/20"
                           }`}
                         >
-                          {isDevolution ? 'Devolução' : 'Troca'}
+                          {isDevolution ? "Devolução" : "Troca"}
                         </span>
 
                         <span
@@ -544,25 +741,38 @@ export function ReturnManagement() {
                         </span>
 
                         <span className="font-mono text-xs text-muted-foreground">
-                          Pedido: <strong className="text-foreground">{ret.orderId}</strong>
+                          Pedido:{" "}
+                          <strong className="text-foreground">
+                            {ret.orderId}
+                          </strong>
                         </span>
 
                         <span className="text-muted-foreground/60">•</span>
 
                         <span className="font-mono text-xs text-muted-foreground">
-                          Cliente: <strong className="text-foreground">{ret.customerId}</strong>
+                          Cliente:{" "}
+                          <strong className="text-foreground">
+                            {ret.customerId}
+                          </strong>
                         </span>
 
                         <span className="text-muted-foreground/60">•</span>
 
                         <span className="font-mono text-xs text-muted-foreground">
-                          Produto: <strong className="text-foreground">{ret.productId}</strong>
+                          Produto:{" "}
+                          <strong className="text-foreground">
+                            {ret.productId}
+                          </strong>
                         </span>
                       </div>
 
                       <div>
-                        <h4 className="text-base font-bold text-foreground">Motivo: {ret.reason}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ret.description}</p>
+                        <h4 className="text-base font-bold text-foreground">
+                          Motivo: {ret.reason}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                          {ret.description}
+                        </p>
                       </div>
 
                       {/* Optional inspection / tracking info */}
@@ -571,7 +781,9 @@ export function ReturnManagement() {
                           <div className="flex items-center gap-1 text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border/50">
                             <Truck className="h-3 w-3 text-sky-500" />
                             <span>Rastreio:</span>
-                            <span className="font-mono font-medium text-foreground">{ret.trackingCode}</span>
+                            <span className="font-mono font-medium text-foreground">
+                              {ret.trackingCode}
+                            </span>
                           </div>
                         )}
 
@@ -579,7 +791,9 @@ export function ReturnManagement() {
                           <div className="flex items-center gap-1 text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border/50">
                             <FileCheck className="h-3 w-3 text-purple-500" />
                             <span>Laudo:</span>
-                            <span className="font-medium text-foreground">{ret.inspectionResult}</span>
+                            <span className="font-medium text-foreground">
+                              {ret.inspectionResult}
+                            </span>
                           </div>
                         )}
 
@@ -587,7 +801,9 @@ export function ReturnManagement() {
                           <div className="flex items-center gap-1 text-rose-600 bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">
                             <ShieldAlert className="h-3 w-3" />
                             <span>Motivo Recusa:</span>
-                            <span className="font-medium">{ret.rejectionReason}</span>
+                            <span className="font-medium">
+                              {ret.rejectionReason}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -595,28 +811,89 @@ export function ReturnManagement() {
 
                     {/* Actions */}
                     <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-border/50">
-                      {/* Advance workflow button */}
-                      {nextStatus && (
+                      {ret.status === "REQUESTED" && (
                         <Button
                           size="sm"
-                          onClick={() => handleAdvanceStatus(ret)}
+                          onClick={() => handlePost(ret)}
                           className="h-8 text-xs font-semibold gap-1.5 bg-primary text-primary-foreground"
                         >
-                          <span>Avançar p/ {STATUS_CONFIG[nextStatus].label}</span>
-                          <ArrowRight className="h-3 w-3" />
+                          Postar
                         </Button>
                       )}
-
-                      {/* If status is RECEIVED or INSPECTING, allow inspection */}
-                      {(ret.status === 'RECEIVED' || ret.status === 'INSPECTING') && (
+                      {ret.status === "POSTED" && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            void performTransition(
+                              "registrar recebimento",
+                              () => returnsApi.receive(ret.id),
+                            )
+                          }
+                        >
+                          Receber
+                        </Button>
+                      )}
+                      {(ret.status === "RECEIVED" ||
+                        ret.status === "ADJUSTMENT_REQUESTED") && (
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => handleOpenInspection(ret)}
+                          onClick={() =>
+                            void performTransition("iniciar inspeção", () =>
+                              returnsApi.startInspection(ret.id),
+                            )
+                          }
                           className="h-8 text-xs font-semibold gap-1.5"
                         >
                           <FileCheck className="h-3.5 w-3.5 text-purple-600" />
-                          <span>Inspecionar Produto</span>
+                          <span>Iniciar inspeção</span>
+                        </Button>
+                      )}
+                      {ret.status === "INSPECTING" && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleOpenInspection(ret)}
+                          >
+                            Inspecionar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAdjustment(ret)}
+                          >
+                            Solicitar ajuste
+                          </Button>
+                        </>
+                      )}
+                      {ret.status === "APPROVED" && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            void performTransition("concluir devolução", () =>
+                              returnsApi.complete(ret.id),
+                            )
+                          }
+                        >
+                          Concluir
+                        </Button>
+                      )}
+                      {(
+                        [
+                          "REQUESTED",
+                          "POSTED",
+                          "RECEIVED",
+                          "INSPECTING",
+                          "ADJUSTMENT_REQUESTED",
+                          "APPROVED",
+                        ] as ReturnStatusValue[]
+                      ).includes(ret.status) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDeletingReturn(ret)}
+                        >
+                          Cancelar
                         </Button>
                       )}
 
@@ -628,16 +905,6 @@ export function ReturnManagement() {
                         title="Alterar Solicitação"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeletingReturn(ret)}
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600"
-                        title="Excluir Solicitação"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -656,7 +923,7 @@ export function ReturnManagement() {
         description="Abra uma solicitação de logística reversa vinculada a um pedido de e-commerce."
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground">
                 ID do Pedido <span className="text-rose-500">*</span>
@@ -665,19 +932,9 @@ export function ReturnManagement() {
                 required
                 placeholder="Ex: PED-10294"
                 value={createForm.orderId}
-                onChange={(e) => setCreateForm({ ...createForm, orderId: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                ID do Cliente <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                required
-                placeholder="Ex: CLI-8821"
-                value={createForm.customerId}
-                onChange={(e) => setCreateForm({ ...createForm, customerId: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, orderId: e.target.value })
+                }
               />
             </div>
 
@@ -689,69 +946,138 @@ export function ReturnManagement() {
                 required
                 placeholder="Ex: PROD-441"
                 value={createForm.productId}
-                onChange={(e) => setCreateForm({ ...createForm, productId: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, productId: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                ID do Item no Pedido <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                required
+                placeholder="ID do item comprado"
+                value={createForm.items[0]?.orderItemId || ""}
+                onChange={(e) =>
+                  setCreateForm({
+                    ...createForm,
+                    items: [
+                      {
+                        ...createForm.items[0],
+                        orderItemId: e.target.value,
+                        quantity: createForm.items[0]?.quantity || 1,
+                      },
+                    ],
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Quantidade <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                required
+                type="number"
+                min={1}
+                step={1}
+                value={createForm.items[0]?.quantity || 1}
+                onChange={(e) =>
+                  setCreateForm({
+                    ...createForm,
+                    items: [
+                      {
+                        ...createForm.items[0],
+                        orderItemId: createForm.items[0]?.orderItemId || "",
+                        quantity: Number(e.target.value),
+                      },
+                    ],
+                  })
+                }
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Tipo de Solicitação</label>
+              <label className="text-xs font-semibold text-foreground">
+                Tipo de Solicitação
+              </label>
               <select
                 value={createForm.type}
-                onChange={(e) => setCreateForm({ ...createForm, type: e.target.value as any })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, type: e.target.value as any })
+                }
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="DEVOLUTION">Devolução (Estorno de Valor)</option>
-                <option value="EXCHANGE">Troca (Substituição de Produto)</option>
+                <option value="EXCHANGE">
+                  Troca (Substituição de Produto)
+                </option>
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Motivo</label>
+              <label className="text-xs font-semibold text-foreground">
+                Motivo
+              </label>
               <select
                 value={createForm.reason}
-                onChange={(e) => setCreateForm({ ...createForm, reason: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, reason: e.target.value })
+                }
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="Defeito de fabricação">Defeito de fabricação</option>
-                <option value="Arrependimento de compra">Arrependimento de compra (7 dias)</option>
-                <option value="Tamanho ou modelo incorreto">Tamanho ou modelo incorreto</option>
-                <option value="Produto avariado no transporte">Produto avariado no transporte</option>
-                <option value="Item divergente da nota fiscal">Item divergente da nota fiscal</option>
+                <option value="Defeito de fabricação">
+                  Defeito de fabricação
+                </option>
+                <option value="Arrependimento de compra">
+                  Arrependimento de compra (7 dias)
+                </option>
+                <option value="Tamanho ou modelo incorreto">
+                  Tamanho ou modelo incorreto
+                </option>
+                <option value="Produto avariado no transporte">
+                  Produto avariado no transporte
+                </option>
+                <option value="Item divergente da nota fiscal">
+                  Item divergente da nota fiscal
+                </option>
               </select>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
-              Descrição do Problema / Relato do Cliente <span className="text-rose-500">*</span>
+              Descrição do Problema / Relato do Cliente{" "}
+              <span className="text-rose-500">*</span>
             </label>
             <textarea
               required
               rows={3}
               placeholder="Explique o estado da mercadoria ou relato recebido..."
               value={createForm.description}
-              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, description: e.target.value })
+              }
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Código de Rastreamento (Opcional)</label>
-            <Input
-              placeholder="Ex: QB123456789BR"
-              value={createForm.trackingCode || ''}
-              onChange={(e) => setCreateForm({ ...createForm, trackingCode: e.target.value })}
-            />
-          </div>
-
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCreateOpen(false)}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Registrando...' : 'Registrar Solicitação'}
+              {isSubmitting ? "Registrando..." : "Registrar Solicitação"}
             </Button>
           </div>
         </form>
@@ -766,39 +1092,56 @@ export function ReturnManagement() {
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Motivo</label>
+            <label className="text-xs font-semibold text-foreground">
+              Motivo
+            </label>
             <Input
               required
-              value={editForm.reason || ''}
-              onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
+              value={editForm.reason || ""}
+              onChange={(e) =>
+                setEditForm({ ...editForm, reason: e.target.value })
+              }
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Descrição</label>
+            <label className="text-xs font-semibold text-foreground">
+              Descrição
+            </label>
             <textarea
               required
               rows={3}
-              value={editForm.description || ''}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              value={editForm.description || ""}
+              onChange={(e) =>
+                setEditForm({ ...editForm, description: e.target.value })
+              }
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Código de Rastreamento</label>
+            <label className="text-xs font-semibold text-foreground">
+              Código de Rastreamento
+            </label>
             <Input
-              value={editForm.trackingCode || ''}
-              onChange={(e) => setEditForm({ ...editForm, trackingCode: e.target.value })}
+              value={editForm.trackingCode || ""}
+              onChange={(e) =>
+                setEditForm({ ...editForm, trackingCode: e.target.value })
+              }
             />
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setEditingReturn(null)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingReturn(null)}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
+              {isSubmitting ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </div>
         </form>
@@ -813,20 +1156,25 @@ export function ReturnManagement() {
       >
         <form onSubmit={handleInspectSubmit} className="space-y-4">
           <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/10 text-xs text-purple-700 dark:text-purple-300">
-            A inspeção técnica define se o item atende às políticas de troca/devolução. A decisão definirá o status
-            final como <strong>Aprovado</strong> ou <strong>Rejeitado</strong>.
+            A inspeção técnica define se o item atende às políticas de
+            troca/devolução. A decisão definirá o status final como{" "}
+            <strong>Aprovado</strong> ou <strong>Rejeitado</strong>.
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Parecer da Inspeção</label>
+            <label className="text-xs font-semibold text-foreground">
+              Parecer da Inspeção
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setInspectForm({ ...inspectForm, approved: true })}
+                onClick={() =>
+                  setInspectForm({ ...inspectForm, approved: true })
+                }
                 className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-semibold text-sm transition-all ${
                   inspectForm.approved
-                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 ring-2 ring-emerald-500/30'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-600 ring-2 ring-emerald-500/30"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -835,11 +1183,13 @@ export function ReturnManagement() {
 
               <button
                 type="button"
-                onClick={() => setInspectForm({ ...inspectForm, approved: false })}
+                onClick={() =>
+                  setInspectForm({ ...inspectForm, approved: false })
+                }
                 className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-semibold text-sm transition-all ${
                   !inspectForm.approved
-                    ? 'border-rose-500 bg-rose-500/15 text-rose-600 ring-2 ring-rose-500/30'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                    ? "border-rose-500 bg-rose-500/15 text-rose-600 ring-2 ring-rose-500/30"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <XCircle className="h-4 w-4" />
@@ -850,13 +1200,16 @@ export function ReturnManagement() {
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
-              Resultado / Laudo da Inspeção <span className="text-rose-500">*</span>
+              Resultado / Laudo da Inspeção{" "}
+              <span className="text-rose-500">*</span>
             </label>
             <textarea
-              required
+              required={inspectForm.approved}
               rows={3}
               value={inspectForm.result}
-              onChange={(e) => setInspectForm({ ...inspectForm, result: e.target.value })}
+              onChange={(e) =>
+                setInspectForm({ ...inspectForm, result: e.target.value })
+              }
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
@@ -864,23 +1217,34 @@ export function ReturnManagement() {
           {!inspectForm.approved && (
             <div className="space-y-1.5 animate-in fade-in duration-200">
               <label className="text-xs font-semibold text-rose-600">
-                Motivo Detalhado da Rejeição <span className="text-rose-500">*</span>
+                Motivo Detalhado da Rejeição{" "}
+                <span className="text-rose-500">*</span>
               </label>
               <Input
                 required
                 placeholder="Ex: Produto com marcas severas de mau uso ou lacre violado"
-                value={inspectForm.rejectionReason || ''}
-                onChange={(e) => setInspectForm({ ...inspectForm, rejectionReason: e.target.value })}
+                value={inspectForm.rejectionReason || ""}
+                onChange={(e) =>
+                  setInspectForm({
+                    ...inspectForm,
+                    rejectionReason: e.target.value,
+                  })
+                }
               />
             </div>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => setInspectingReturn(null)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setInspectingReturn(null)}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Registrando...' : 'Concluir Laudo'}
+              {isSubmitting ? "Registrando..." : "Concluir Laudo"}
             </Button>
           </div>
         </form>
@@ -890,27 +1254,38 @@ export function ReturnManagement() {
       <Modal
         isOpen={!!deletingReturn}
         onClose={() => setDeletingReturn(null)}
-        title="Confirmar Exclusão"
-        description="Esta ação removerá a solicitação de devolução definitivamente."
+        title="Confirmar cancelamento"
+        description="A solicitação será cancelada e os efeitos financeiros pendentes serão revertidos."
         maxWidth="sm"
       >
         <div className="space-y-4">
           <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-600 flex items-start gap-2.5">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">Deseja realmente excluir?</p>
+              <p className="font-semibold">Deseja realmente cancelar?</p>
               <p className="mt-0.5 text-muted-foreground">
-                Pedido: #{deletingReturn?.orderId} • Produto: {deletingReturn?.productId}
+                Pedido: #{deletingReturn?.orderId} • Produto:{" "}
+                {deletingReturn?.productId}
               </p>
             </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setDeletingReturn(null)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeletingReturn(null)}
+              disabled={isSubmitting}
+            >
               Cancelar
             </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteConfirm} disabled={isSubmitting}>
-              {isSubmitting ? 'Excluindo...' : 'Excluir Definitivamente'}
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleCancelConfirm}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Cancelando..." : "Cancelar Solicitação"}
             </Button>
           </div>
         </div>
