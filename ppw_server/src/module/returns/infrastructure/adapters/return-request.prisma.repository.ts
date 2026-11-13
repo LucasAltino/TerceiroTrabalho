@@ -3,6 +3,8 @@ import { ReturnRequest } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { ReturnRequestEntity } from '../../domain/entity/return-request.entity';
 import { ReturnRequestRepository } from '../../domain/ports/return-request.repository';
+import { ReturnStatusValue } from '../../domain/value-object/return-status.value.object';
+import { VersionConflictError } from '../../domain/errors';
 
 @Injectable()
 export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
@@ -32,12 +34,42 @@ export class ReturnRequestPrismaRepository implements ReturnRequestRepository {
       data: {
         reason: dados.reason,
         description: dados.description,
-        status: dados.status.getValue(),
         trackingCode: dados.trackingCode ?? null,
-        inspectionResult: dados.inspectionResult ?? null,
-        rejectionReason: dados.rejectionReason ?? null,
       },
     });
+  }
+
+  async updateWithVersion(
+    request: ReturnRequestEntity,
+    expectedVersion: number,
+    from: ReturnStatusValue[],
+  ): Promise<ReturnRequest> {
+    const data = request.props;
+    const result = await this.prisma.returnRequest.updateMany({
+      where: {
+        id: data.id,
+        version: expectedVersion,
+        status: { in: from },
+      },
+      data: {
+        status: data.status.getValue(),
+        version: { increment: 1 },
+        trackingCode: data.trackingCode ?? null,
+        inspectionResult: data.inspectionResult ?? null,
+        rejectionReason: data.rejectionReason ?? null,
+        adjustmentRequestedAt: data.adjustmentRequestedAt ?? null,
+        adjustmentReason: data.adjustmentReason ?? null,
+        updatedAt: new Date(),
+      },
+    });
+
+    if (result.count === 0) {
+      throw new VersionConflictError('Return request was changed by another operation');
+    }
+
+    const updated = await this.prisma.returnRequest.findUnique({ where: { id: data.id } });
+    if (!updated) throw new Error('Return request disappeared after a successful update');
+    return updated;
   }
 
   async delete(id: string): Promise<void> {

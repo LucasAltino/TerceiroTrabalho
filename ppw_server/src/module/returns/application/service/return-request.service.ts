@@ -9,6 +9,7 @@ import {
   StartInspectionRule,
   TRANSITION_RULES,
 } from '../../domain/transition/return-transition-rules';
+import { TransitionRule } from '../../domain/transition/transition-rule';
 import {
   CreateReturnRequestDto,
   InspectReturnRequestDto,
@@ -104,8 +105,16 @@ export class ReturnRequestService
       adjustmentReason: entidade.props.adjustmentReason ?? '',
       justification: '',
     };
-    const solicitacaoAtualizada = entidade.transition(regra, payload);
-    return this.paraResposta(await this.repositorio.update(solicitacaoAtualizada));
+    return this.transicionarEntidade(entidade, regra, payload);
+  }
+
+  async transicionar(
+    id: string,
+    acao: keyof typeof TRANSITION_RULES,
+    payload: unknown,
+  ): Promise<ReturnRequestResponse> {
+    const entidade = this.paraEntidade(await this.buscarObrigatoria(id));
+    return this.transicionarEntidade(entidade, TRANSITION_RULES[acao], payload);
   }
 
   async registrarInspecao(id: string, dto: InspectReturnRequestDto): Promise<ReturnRequestResponse> {
@@ -130,6 +139,20 @@ export class ReturnRequestService
 
   private paraEntidade(solicitacao: any): ReturnRequestEntity {
     return new ReturnRequestEntity({ ...solicitacao, status: ReturnStatus.from(solicitacao.status) });
+  }
+
+  private async transicionarEntidade(
+    entidade: ReturnRequestEntity,
+    regra: TransitionRule<any>,
+    payload: unknown,
+  ): Promise<ReturnRequestResponse> {
+    const transicionada = entidade.transition(regra, payload);
+    const atualizada = await this.repositorio.updateWithVersion(
+      transicionada,
+      entidade.props.version,
+      regra.from,
+    );
+    return this.paraResposta(atualizada);
   }
 
   private paraResposta(solicitacao: any): ReturnRequestResponse {
