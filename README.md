@@ -115,6 +115,18 @@ O SOLID **não aparece como uma classe ou pasta chamada “SOLID”**; os princ�
 **Onde fica mais evidente:** nos módulos de **devoluções** e **tickets**, especialmente no uso de interfaces/ports e injeção de dependência.
 
 
+## OCP
+
+- **OCP — Aberto/Fechado:** o cálculo de reembolso depende da interface `RefundStrategy`, implementada por `ProportionalRefundCalculator`. Assim, é possível criar outra estratégia de cálculo sem alterar a atual. As regras de transição também são separadas pela interface `TransitionRule`. **Ressalva:** para adicionar uma transição, ainda é preciso registrá-la em `TRANSITION_RULES`.
+
+## SRP
+
+- **SRP — Responsabilidade Única:** as camadas separam funções: o controller lida com a requisição, o serviço coordena a operação e o repositório cuida da persistência. Veja `ReturnRequestPrismaRepository`. **Ressalva:** `ReturnRequestService` concentra vários casos de uso — criar, buscar, listar, atualizar e transicionar —, então essa classe não segue o SRP de forma tão estrita.
+
+## LSP
+
+- **LSP — Substituição de Liskov:** o exemplo mais próximo é `ReturnRequestPrismaRepository`, que implementa o contrato `ReturnRequestRepository`. Outro repositório que cumpra esse contrato pode substituí-lo para o serviço, desde que preserve o comportamento esperado. **Ressalva:** aqui o princípio aparece via interfaces e injeção; não há uma hierarquia explícita de classes-base e classes derivadas.
+- 
 ## Máquina de estados
 
 ```mermaid
